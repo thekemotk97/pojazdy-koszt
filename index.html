@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e9edf0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12171c" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Garaż – koszty pojazdów</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚗</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#e9edf0; --surface:#ffffff; --surface2:#f4f6f8; --ink:#18212b; --muted:#5e6b78; --line:#cbd3da;
+  --accent:#f2b300; --accent-ink:#18212b; --danger:#b3261e; --ok:#2e7d4f; --eu:#1f4ea3;
+  --sans:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --cond:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#12171c;--surface:#1a2128;--surface2:#212a32;--ink:#e6ebef;--muted:#95a2ae;--line:#2c3640;--danger:#ff8a80;--ok:#7bd19c;color-scheme:dark}
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.5 var(--sans);font-variant-numeric:tabular-nums;-webkit-text-size-adjust:100%}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.wrap{max-width:980px;margin:0 auto;padding:0 16px}
+
+/* top bar */
+.top{display:flex;align-items:center;gap:12px;padding:14px 0 6px}
+.brand{font:700 26px/1 var(--cond);letter-spacing:.01em;margin-right:auto}
+.brand small{display:block;font:500 13px/1.2 var(--sans);color:var(--muted);letter-spacing:0;margin-top:3px}
+.ghost{background:none;border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-weight:500}
+.ghost:hover{border-color:var(--muted)}
+.sync{display:inline-flex;align-items:center;gap:8px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
+.dot.ok{background:var(--ok)} .dot.err{background:var(--danger)} .dot.busy{background:var(--accent);animation:pulse 1s infinite alternate}
+@keyframes pulse{to{opacity:.3}}
+@media (prefers-reduced-motion:reduce){.dot.busy{animation:none}}
+
+/* plates */
+.plates{display:flex;gap:12px;overflow-x:auto;padding:14px 2px 16px;scrollbar-width:thin}
+.plate{flex:none;display:inline-flex;align-items:stretch;height:48px;padding:0;border:2px solid #20262c;border-radius:7px;background:#fff;color:#111;overflow:hidden;opacity:.5;transition:opacity .15s,transform .15s}
+.plate:hover{opacity:.8}
+.plate[aria-current="true"]{opacity:1;transform:translateY(-2px);box-shadow:0 4px 0 var(--accent)}
+.plate .eu{width:22px;background:var(--eu);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:5px 0 3px;font:600 10px/1 var(--sans)}
+.plate .eu::before{content:"";width:11px;height:11px;border-radius:50%;border:2px dotted #ffd200}
+.plate .t{display:flex;align-items:center;padding:0 14px;font:600 26px/1 var(--cond);letter-spacing:.09em;text-transform:uppercase;white-space:nowrap}
+.plate.add{opacity:1;background:transparent;color:var(--ink);border:2px dashed var(--line)}
+.plate.add .t{font-size:18px;letter-spacing:.02em;text-transform:none;color:var(--muted)}
+.plate.add:hover{border-color:var(--muted)}
+
+/* vehicle head */
+.vhead{display:grid;grid-template-columns:1fr minmax(260px,340px);gap:20px;align-items:start;margin-bottom:22px}
+@media (max-width:720px){.vhead{grid-template-columns:1fr}}
+.vtitle h1{font:700 44px/1 var(--cond);margin:4px 0 8px;letter-spacing:.01em;word-break:break-word}
+.vmeta{display:flex;flex-wrap:wrap;gap:6px 22px;color:var(--muted);font-size:15px}
+.vmeta b{color:var(--ink);font-weight:600}
+.linkbtn{background:none;border:0;padding:0;color:var(--muted);text-decoration:underline;text-underline-offset:3px;font-size:14px}
+.linkbtn:hover{color:var(--ink)}
+.vactions{display:flex;gap:16px;margin-top:12px}
+.ledger{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 16px}
+.ledger table{width:100%;border-collapse:collapse}
+.ledger td{padding:4px 0;font-size:15px}
+.ledger td:last-child{text-align:right;white-space:nowrap}
+.ledger tr.total td{border-top:2px solid var(--ink);padding-top:8px;font:700 24px/1.1 var(--cond)}
+.ledger .sub td{color:var(--muted);font-size:13px;padding-top:0}
+
+/* tabs */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{background:none;border:0;border-bottom:3px solid transparent;padding:10px 14px 8px;font:600 19px/1 var(--cond);letter-spacing:.02em;color:var(--muted);white-space:nowrap}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tab:hover{color:var(--ink)}
+.tab.addcat{font:500 15px/1 var(--sans)}
+
+.catbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:16px 0 12px}
+.catbar .sums{display:flex;flex-wrap:wrap;gap:4px 18px;color:var(--muted);font-size:15px;margin-right:auto}
+.catbar .sums b{color:var(--ink);font-weight:600}
+.primary{background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:10px 18px;font-weight:600}
+.primary:hover{filter:brightness(1.05)}
+.danger{background:none;border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:9px 14px;font-weight:500}
+
+/* entries */
+.list{display:flex;flex-direction:column;gap:10px;padding-bottom:40px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;text-align:left;width:100%;padding:0;display:block}
+.card:hover{border-color:var(--muted)}
+.vtop{display:flex;align-items:baseline;gap:6px 16px;flex-wrap:wrap;padding:12px 16px 8px}
+.vtop .date{font:600 20px/1 var(--cond)}
+.vtop .km{color:var(--muted)}
+.vtop .amt{margin-left:auto;font:700 20px/1 var(--cond)}
+.parts{list-style:none;margin:0;padding:0 16px}
+.parts li{display:grid;grid-template-columns:minmax(120px,190px) 1fr auto;gap:2px 14px;padding:7px 0;border-top:1px solid var(--line);font-size:15px}
+.parts .co{font-weight:600}
+.parts .nm{min-width:0}
+.parts .oem{grid-column:2;color:var(--muted);font-size:13px;white-space:pre-line}
+.parts .pc{grid-column:3;grid-row:1;text-align:right;white-space:nowrap}
+@media (max-width:560px){.parts li{grid-template-columns:1fr auto}.parts .nm,.parts .oem{grid-column:1}.parts .pc{grid-column:2;grid-row:1}}
+.vfoot{display:flex;flex-wrap:wrap;gap:4px 20px;padding:8px 16px 12px;color:var(--muted);font-size:14px;border-top:1px solid var(--line)}
+.vfoot b{color:var(--ink);font-weight:600}
+.row{display:grid;grid-template-columns:92px 1fr auto;gap:2px 16px;align-items:baseline;padding:11px 16px}
+.row .date{font:600 18px/1.2 var(--cond)}
+.row .main{min-width:0}
+.row .main .muted{display:block}
+.row .amt{font:700 19px/1.2 var(--cond);text-align:right;white-space:nowrap}
+.row .amt small{display:block;font:400 13px/1.3 var(--sans);color:var(--muted)}
+.muted{color:var(--muted);font-size:14px}
+@media (max-width:560px){.row{grid-template-columns:1fr auto}.row .date{grid-column:1/-1}.top .ghost{padding:7px 10px;font-size:14px}.brand small{display:none}}
+.ghost{white-space:nowrap}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:28px 20px;text-align:center;color:var(--muted)}
+.empty p{margin:0 0 14px}
+.hero-empty{padding:50px 24px}
+.hero-empty h2{font:700 30px/1.1 var(--cond);color:var(--ink);margin:0 0 8px}
+.btnrow{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+
+/* dialog */
+dialog{border:0;border-radius:12px;padding:0;background:var(--surface);color:var(--ink);width:min(780px,calc(100vw - 24px));max-height:calc(100dvh - 24px)}
+dialog::backdrop{background:rgba(10,14,18,.55)}
+.dlg{display:flex;flex-direction:column;max-height:calc(100dvh - 24px)}
+.dlg header{display:flex;align-items:center;gap:10px;padding:16px 20px 6px}
+.dlg header h3{font:700 26px/1.1 var(--cond);margin:0;margin-right:auto}
+.x{background:none;border:0;font-size:26px;line-height:1;padding:4px 8px;color:var(--muted)}
+.dlg .body{padding:8px 20px 16px;overflow:auto}
+.dlg footer{display:flex;gap:10px;align-items:center;padding:12px 20px 16px;border-top:1px solid var(--line)}
+.dlg footer .spacer{margin-right:auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.f{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted)}
+.f input,.f select,.f textarea{background:var(--surface2);border:1px solid var(--line);border-radius:7px;padding:9px 10px;color:var(--ink);font-size:16px;width:100%;min-width:0}
+.f textarea{resize:vertical;min-height:42px}
+.f.wide{grid-column:1/-1}
+.hint{color:var(--muted);font-size:13px;margin:6px 0 0}
+.hint a{color:inherit}
+.prows{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.prow{display:grid;grid-template-columns:1.1fr 1.6fr 1fr 64px 92px 34px;gap:8px;align-items:end;padding:10px;background:var(--surface2);border-radius:8px}
+.prow .f input,.prow .f textarea{background:var(--surface)}
+@media (max-width:620px){.prow{grid-template-columns:1fr 1fr 34px}.prow>.f:first-child,.prow .f.nm,.prow .f.oem{grid-column:1/-1}}
+.ptot{grid-column:1/-1;text-align:right;font-size:14px;color:var(--muted)}.ptot:empty{display:none}.ptot b{color:var(--ink)}
+.parts .pc small{display:block;color:var(--muted);font-size:13px}
+.oct{display:inline-block;min-width:34px;text-align:center;border:1.5px solid var(--ink);border-radius:5px;padding:0 5px;margin-right:8px;font:600 14px/1.35 var(--cond)}
+.octs{margin-top:12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;align-self:flex-start}
+.seg label{position:relative}
+.seg input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.seg span{display:block;padding:9px 20px;font:600 18px/1 var(--cond);color:var(--ink);background:var(--surface2);border-left:1px solid var(--line)}
+.seg label:first-child span{border-left:0}
+.seg input:checked+span{background:var(--accent);color:var(--accent-ink)}
+.seg input:focus-visible+span{outline:3px solid var(--accent);outline-offset:-3px}
+.rm{background:none;border:1px solid var(--line);border-radius:7px;height:42px;width:34px;color:var(--muted);font-size:18px}
+.sectionlabel{font:600 18px/1 var(--cond);margin:18px 0 0;color:var(--ink)}
+.calc{margin-top:12px;padding:10px 12px;background:var(--surface2);border-radius:8px;font-size:15px}
+.menu{display:flex;flex-direction:column;gap:8px}
+.menu button{text-align:left;background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.menu button span{display:block;color:var(--muted);font-size:13px}
+.menu button:hover{border-color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:15px;z-index:99;max-width:calc(100vw - 32px)}
+.status-line{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--surface2);border-radius:8px;margin-bottom:14px}
+ol.steps{padding-left:20px;margin:8px 0 0;color:var(--muted);font-size:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">Garaż<small>koszty pojazdów</small></div>
+    <button class="ghost sync" id="syncBtn"><span class="dot" id="syncDot"></span><span id="syncTxt">Tylko lokalnie</span></button>
+    <button class="ghost" id="dataBtn">Excel / dane</button>
+  </header>
+  <nav class="plates" id="plates" aria-label="Pojazdy"></nav>
+  <main id="main"></main>
+</div>
+<dialog id="dlg"></dialog>
+<input type="file" id="fileXlsx" accept=".xlsx" hidden>
+<input type="file" id="fileJson" accept=".json,application/json" hidden>
+
+<script>
+// ===== CORE-START (czysta logika: dane, scalanie, obliczenia, eksport, import) =====
+const FILE_NAME = 'garaz-koszty-pojazdow.json';
+const TYPES = { service:'Serwis', fuel:'Paliwo', other:'Inne' };
+
+function uid(){
+  if (typeof crypto!=='undefined' && crypto.randomUUID) return crypto.randomUUID().replace(/-/g,'').slice(0,14);
+  return Date.now().toString(36)+Math.random().toString(36).slice(2,10);
+}
+function num(x){
+  if (x===null || x===undefined || x==='') return null;
+  if (typeof x==='number') return isFinite(x) ? x : null;
+  const s = String(x).replace(/\s|\u00a0/g,'').replace(/km|zł|zl|l$/ig,'').replace(',','.');
+  if (s==='') return null;
+  const n = parseFloat(s);
+  return isFinite(n) ? n : null;
+}
+function str(v){ if (v===null || v===undefined) return ''; return String(v).trim(); }
+// część: ilość × cena za sztukę (starsze wpisy miały tylko koszt łączny)
+function partQty(p){ return p.qty!=null ? p.qty : 1; }
+function partUnit(p){ return p.unit!=null ? p.unit : (p.cost!=null ? round2(p.cost/partQty(p)) : null); }
+function partCost(p){ return p.unit!=null ? round2(partQty(p)*p.unit) : (p.cost!=null ? p.cost : null); }
+function fuelOct(e){ return e.octane || 95; }
+function alive(a){ return (a||[]).filter(x=>x && !x.del); }
+function emptyState(){ return { v:1, vehicles:[] }; }
+function round2(n){ return Math.round(n*100)/100; }
+
+// Scalanie dwóch wersji danych (lokalnej i z gista) – rekord po rekordzie, wygrywa nowszy "u".
+function mergeArr(a, b, keys){
+  const ck = keys[0], rest = keys.slice(1);
+  const order = [], map = new Map();
+  for (const x of (a||[])) { if (!map.has(x.id)) order.push(x.id); map.set(x.id, x); }
+  for (const y of (b||[])) {
+    const x = map.get(y.id);
+    if (!x) { order.push(y.id); map.set(y.id, y); continue; }
+    const w = (y.u||0) > (x.u||0) ? y : x;
+    const out = { ...w };
+    if (ck) out[ck] = mergeArr(x[ck], y[ck], rest);
+    map.set(y.id, out);
+  }
+  return order.map(id=>map.get(id));
+}
+function mergeState(a, b){
+  return { v:1, vehicles: mergeArr(a && a.vehicles, b && b.vehicles, ['cats','entries']) };
+}
+
+function newVehicle(name){
+  const t = Date.now();
+  return { id:uid(), u:t, name, cats:[
+    { id:uid(), u:t, name:'Serwis', type:'service', entries:[] },
+    { id:uid(), u:t, name:'Paliwo', type:'fuel', entries:[] },
+    { id:uid(), u:t, name:'Inne', type:'other', entries:[] },
+  ]};
+}
+
+// --- obliczenia ---
+function byDateAsc(x,y){ return (x.date||'').localeCompare(y.date||'') || ((x.km??0)-(y.km??0)); }
+function fuelRows(entries){
+  const list = alive(entries).slice().sort((x,y)=>{
+    if (x.km!=null && y.km!=null && x.km!==y.km) return x.km-y.km;
+    return (x.date||'').localeCompare(y.date||'');
+  });
+  let prev = null;
+  return list.map(e=>{
+    const diff = (prev && e.km!=null && prev.km!=null) ? e.km-prev.km : null;
+    const cost = (e.liters!=null && e.price!=null) ? e.liters*e.price : null;
+    const cons = (diff>0 && e.liters>0) ? e.liters/diff*100 : null;
+    prev = e;
+    return { e, diff, cost, cons };
+  });
+}
+function catTotals(cat){
+  const es = alive(cat.entries);
+  if (cat.type==='service') {
+    let parts=0, labor=0;
+    for (const v of es) { labor += v.labor||0; for (const p of (v.parts||[])) parts += partCost(p)||0; }
+    return { a:parts, b:labor, total:parts+labor, count:es.length };
+  }
+  if (cat.type==='fuel') {
+    const rows = fuelRows(es);
+    let cost=0, liters=0, cl=0, ck=0;
+    for (const r of rows) {
+      cost += r.cost||0; liters += r.e.liters||0;
+      if (r.diff>0) { ck += r.diff; cl += r.e.liters||0; }
+    }
+    return { a:cost, b:0, total:cost, liters, avg: ck>0 ? cl/ck*100 : null, count:rows.length };
+  }
+  let a=0,b=0;
+  for (const e of es) { a += e.cost||0; b += e.service||0; }
+  return { a, b, total:a+b, count:es.length };
+}
+function vehicleStats(v){
+  let total=0, maxKm=null, avg=null;
+  for (const c of alive(v.cats)) {
+    const t = catTotals(c); total += t.total;
+    if (c.type==='fuel' && t.avg!=null && avg==null) avg = t.avg;
+    for (const e of alive(c.entries)) if (e.km!=null && (maxKm==null || e.km>maxKm)) maxKm = e.km;
+  }
+  return { total, maxKm, avg };
+}
+
+// --- eksport: opis arkusza niezależny od biblioteki ---
+function colL(i){ let s=''; i++; while(i>0){ const m=(i-1)%26; s=String.fromCharCode(65+m)+s; i=Math.floor((i-1)/26);} return s; }
+function sheetNameSafe(s, used){
+  let n = s.replace(/[\[\]:*?\/\\]/g,' ').replace(/\s+/g,' ').trim().slice(0,31) || 'Arkusz';
+  let base=n, k=2;
+  while (used.has(n.toLowerCase())) { const suf=' ('+(k++)+')'; n = base.slice(0,31-suf.length)+suf; }
+  used.add(n.toLowerCase());
+  return n;
+}
+function qsheet(n){ return "'"+n.replace(/'/g,"''")+"'"; }
+const FMT = { date:'yyyy-mm-dd', pln:'#,##0.00 "zł"', km:'0 "km"', lit:'0.00', cons:'0.0', l100:'0.0 "l/100km"' };
+const HEAD = { b:true, fill:'FFE9EDF0' };
+
+function buildSpec(state){
+  const used = new Set(['podsumowanie']);
+  const sheets = [];
+  const summaryRows = []; // {veh, cat, sheet, aRef, bRef, a, b}
+  for (const v of alive(state.vehicles)) {
+    for (const c of alive(v.cats)) {
+      const name = sheetNameSafe(v.name+' - '+c.name, used);
+      const sh = c.type==='service' ? serviceSheet(c) : c.type==='fuel' ? fuelSheet(c) : otherSheet(c);
+      sh.name = name;
+      sheets.push(sh);
+      summaryRows.push({ veh:v.name, cat:c.name, sheet:name, ...sh.refs });
+    }
+  }
+  sheets.unshift(summarySheet(summaryRows));
+  return sheets;
+}
+function setCell(rows, r, c, cell){ while (rows.length<=r) rows.push([]); rows[r][c]=cell; }
+function dateCell(d){ return d ? { v:d, t:'date', fmt:FMT.date } : null; }
+
+function serviceSheet(cat){
+  const rows=[], merges=[];
+  ['Data','Przebieg','Co','Nazwa','Kod części OEM','Ilość','Cena za szt.','Koszt','Serwis koszt','Wymiana czas (własny)']
+    .forEach((h,i)=>setCell(rows,0,i,{v:h,...HEAD}));
+  const visits = alive(cat.entries).slice().sort(byDateAsc);
+  let r=1, partsSum=0, laborSum=0;
+  for (const v of visits) {
+    const parts = v.parts||[];
+    const n = Math.max(1, parts.length);
+    for (let i=0;i<n;i++) {
+      setCell(rows, r+i, 0, null);
+      if (i===0) {
+        setCell(rows,r,0,dateCell(v.date));
+        if (v.km!=null) setCell(rows,r,1,{v:v.km,fmt:FMT.km});
+        if (v.labor!=null) { setCell(rows,r,8,{v:v.labor,fmt:FMT.pln}); laborSum+=v.labor; }
+        if (v.time) setCell(rows,r,9,{v:v.time});
+      }
+      const p = parts[i];
+      if (p) {
+        if (p.co) setCell(rows,r+i,2,{v:p.co});
+        if (p.name) setCell(rows,r+i,3,{v:p.name,wrap:true});
+        if (p.oem) setCell(rows,r+i,4,{v:p.oem,wrap:true});
+        const R=r+i+1, q=partQty(p), un=partUnit(p), pc=partCost(p);
+        setCell(rows,r+i,5,{v:q});
+        if (un!=null) setCell(rows,r+i,6,{v:un,fmt:FMT.pln});
+        setCell(rows,r+i,7,{f:`IF(OR(F${R}="",G${R}=""),"",F${R}*G${R})`,r:pc==null?'':pc,fmt:FMT.pln});
+        partsSum+=pc||0;
+      }
+    }
+    if (n>1) for (const col of [0,1,8,9]) merges.push(colL(col)+(r+1)+':'+colL(col)+(r+n));
+    r += n;
+  }
+  setCell(rows,0,11,{v:'PODSUMOWANIE KOSZTÓW',...HEAD});
+  setCell(rows,1,11,{v:'Części:'}); setCell(rows,1,12,{f:'SUM(H:H)',r:round2(partsSum),fmt:FMT.pln});
+  setCell(rows,2,11,{v:'Serwis:'}); setCell(rows,2,12,{f:'SUM(I:I)',r:round2(laborSum),fmt:FMT.pln});
+  setCell(rows,3,11,{v:'Razem:',b:true}); setCell(rows,3,12,{f:'M2+M3',r:round2(partsSum+laborSum),fmt:FMT.pln,b:true});
+  return { rows, merges, widths:[11,12,27,46,18,7,12,12,13,18.5,4,24,14], refs:{aRef:'M2',bRef:'M3',a:partsSum,b:laborSum} };
+}
+function fuelSheet(cat){
+  const rows=[];
+  ['Data','Przebieg','Różnica kilometrów','Ilość litrów','Cena za litr','Koszt','Spalanie obliczone','Spalanie z komputera','Oktany']
+    .forEach((h,i)=>setCell(rows,0,i,{v:h,...HEAD}));
+  const list = fuelRows(cat.entries);
+  let r=1, sum=0, lit=0, cl=0, ck=0;
+  list.forEach((x,i)=>{
+    const R=r+1, e=x.e;
+    setCell(rows,r,0,dateCell(e.date));
+    if (e.km!=null) setCell(rows,r,1,{v:e.km});
+    if (i>0) setCell(rows,r,2,{f:`IF(OR(B${R}="",B${R-1}=""),"",B${R}-B${R-1})`,r:x.diff==null?'':x.diff});
+    if (e.liters!=null) { setCell(rows,r,3,{v:e.liters,fmt:FMT.lit}); lit+=e.liters; }
+    if (e.price!=null) setCell(rows,r,4,{v:e.price,fmt:FMT.pln});
+    setCell(rows,r,5,{f:`IF(OR(D${R}="",E${R}=""),"",D${R}*E${R})`,r:x.cost==null?'':round2(x.cost),fmt:FMT.pln});
+    if (i>0) setCell(rows,r,6,{f:`IF(AND(N(C${R})>0,N(D${R})>0),D${R}/C${R}*100,"")`,r:x.cons==null?'':Math.round(x.cons*1000)/1000,fmt:FMT.cons});
+    if (e.computer!=null) setCell(rows,r,7,{v:e.computer,fmt:FMT.cons});
+    if (e.liters!=null) setCell(rows,r,8,{v:fuelOct(e)});
+    sum += x.cost||0;
+    if (x.diff>0) { ck+=x.diff; cl+=e.liters||0; }
+    r++;
+  });
+  setCell(rows,0,10,{v:'PODSUMOWANIE KOSZTÓW',...HEAD});
+  setCell(rows,1,10,{v:'Paliwo:'}); setCell(rows,1,11,{f:'SUM(F:F)',r:round2(sum),fmt:FMT.pln});
+  setCell(rows,2,10,{v:'Litry:'}); setCell(rows,2,11,{f:'SUM(D:D)',r:round2(lit),fmt:FMT.lit});
+  setCell(rows,3,10,{v:'Śr. spalanie:'}); setCell(rows,3,11,{f:'IFERROR(SUMIF(C:C,">0",D:D)/SUMIF(C:C,">0")*100,"")',r:ck>0?Math.round(cl/ck*100000)/1000:'',fmt:FMT.l100});
+  return { rows, merges:[], widths:[11,10,17,11,11,13,17,19,8,4,24,14], refs:{aRef:'L2',bRef:null,a:sum,b:0} };
+}
+function otherSheet(cat){
+  const rows=[];
+  ['Data','Co','Nazwa','Koszt','Koszt serwis'].forEach((h,i)=>setCell(rows,0,i,{v:h,...HEAD}));
+  const list = alive(cat.entries).slice().sort(byDateAsc);
+  let r=1, a=0, b=0;
+  for (const e of list) {
+    setCell(rows,r,0,dateCell(e.date));
+    if (e.co) setCell(rows,r,1,{v:e.co});
+    if (e.name) setCell(rows,r,2,{v:e.name,wrap:true});
+    if (e.cost!=null) { setCell(rows,r,3,{v:e.cost,fmt:FMT.pln}); a+=e.cost; }
+    if (e.service!=null) { setCell(rows,r,4,{v:e.service,fmt:FMT.pln}); b+=e.service; }
+    r++;
+  }
+  setCell(rows,0,6,{v:'PODSUMOWANIE KOSZTÓW',...HEAD});
+  setCell(rows,1,6,{v:'Części:'}); setCell(rows,1,7,{f:'SUM(D:D)',r:round2(a),fmt:FMT.pln});
+  setCell(rows,2,6,{v:'Serwis:'}); setCell(rows,2,7,{f:'SUM(E:E)',r:round2(b),fmt:FMT.pln});
+  setCell(rows,3,6,{v:'Razem:',b:true}); setCell(rows,3,7,{f:'H2+H3',r:round2(a+b),fmt:FMT.pln,b:true});
+  return { rows, merges:[], widths:[11,24,34,12,13,4,24,14], refs:{aRef:'H2',bRef:'H3',a,b} };
+}
+function summarySheet(list){
+  const rows=[];
+  ['Pojazd','Kategoria','Koszt (części / paliwo)','Serwis','Razem'].forEach((h,i)=>setCell(rows,0,i,{v:h,...HEAD}));
+  let r=1;
+  const vehTotals = new Map();
+  for (const s of list) {
+    const R=r+1;
+    setCell(rows,r,0,{v:s.veh}); setCell(rows,r,1,{v:s.cat});
+    setCell(rows,r,2,{f:qsheet(s.sheet)+'!'+s.aRef,r:round2(s.a),fmt:FMT.pln});
+    if (s.bRef) setCell(rows,r,3,{f:qsheet(s.sheet)+'!'+s.bRef,r:round2(s.b),fmt:FMT.pln});
+    else setCell(rows,r,3,{v:0,fmt:FMT.pln});
+    setCell(rows,r,4,{f:`C${R}+D${R}`,r:round2(s.a+s.b),fmt:FMT.pln});
+    vehTotals.set(s.veh,(vehTotals.get(s.veh)||0)+s.a+s.b);
+    r++;
+  }
+  setCell(rows,0,6,{v:'Pojazd',...HEAD}); setCell(rows,0,7,{v:'Razem',...HEAD});
+  let i=1, all=0;
+  for (const [veh,t] of vehTotals) {
+    setCell(rows,i,6,{v:veh}); setCell(rows,i,7,{f:`SUMIF(A:A,G${i+1},E:E)`,r:round2(t),fmt:FMT.pln});
+    all+=t; i++;
+  }
+  setCell(rows,i,6,{v:'Wszystkie pojazdy',b:true}); setCell(rows,i,7,{f:`SUM(H2:H${i})`,r:round2(all),fmt:FMT.pln,b:true});
+  return { name:'Podsumowanie', rows, merges:[], widths:[18,20,22,14,14,4,20,16] };
+}
+
+// --- import z arkusza: działa na prostej "siatce" komórek ---
+// sheet = {name, rows, cols, cell(r,c) -> {v (własna wartość), mv (wartość z komórki scalonej), slave, master}}
+function toISO(v){
+  if (v===null || v===undefined || v==='') return '';
+  if (v instanceof Date) return v.getUTCFullYear()+'-'+String(v.getUTCMonth()+1).padStart(2,'0')+'-'+String(v.getUTCDate()).padStart(2,'0');
+  if (typeof v==='number') return toISO(new Date(Math.round((v-25569)*86400000)));
+  const s=String(v).trim();
+  let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (m) return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+  m=s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})$/);
+  if (m) { const y = m[3].length===2 ? '20'+m[3] : m[3]; return y+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0'); }
+  return '';
+}
+function parseSheets(sheets){
+  const out=[];
+  for (const sh of sheets) {
+    const nm = sh.name.trim();
+    const k = nm.indexOf(' - ');
+    let veh = k>0 ? nm.slice(0,k).trim() : nm, catName = k>0 ? nm.slice(k+3).trim() : 'Inne';
+    if (veh.toLowerCase()==='podsumowanie') continue;
+    const hdr=[];
+    for (let c=1;c<=Math.min(sh.cols,40);c++) hdr[c]=str(sh.cell(1,c).v).toLowerCase();
+    const find = pred => { for (let c=1;c<hdr.length;c++) if (hdr[c] && !hdr[c].includes('podsumowanie') && pred(hdr[c])) return c; return 0; };
+    const col = { date:find(h=>h==='data'), km:find(h=>h.startsWith('przebieg')) };
+    const has = s => hdr.some(h=>h && h.includes(s));
+    let type, entries=[];
+    const t = Date.now();
+    const get = (r,c,useMaster)=>{ if(!c) return null; const x=sh.cell(r,c); const v = useMaster ? x.mv : x.v; return (v===''||v===undefined)?null:v; };
+    if (has('litr')) {
+      type='fuel';
+      col.l=find(h=>h.includes('litr')&&!h.includes('cena')); col.p=find(h=>h.includes('cena')); col.pc=find(h=>h.includes('komputer')); col.oct=find(h=>h.includes('oktan'));
+      for (let r=2;r<=sh.rows;r++) {
+        const km=num(get(r,col.km)), l=num(get(r,col.l));
+        if (km==null && l==null) continue;
+        entries.push({ id:uid(), u:t, date:toISO(get(r,col.date)), km, liters:l, price:num(get(r,col.p)), computer:num(get(r,col.pc)), octane:[95,98,100].includes(num(get(r,col.oct)))?num(get(r,col.oct)):95 });
+      }
+    } else if (col.km && (has('kod') || hdr.includes('co'))) {
+      type='service';
+      col.co=find(h=>h==='co'); col.nm=find(h=>h==='nazwa'); col.oem=find(h=>h.includes('kod'));
+      col.qty=find(h=>h.startsWith('ilo')); col.unit=find(h=>h.includes('cena')); col.cost=find(h=>h==='koszt'); col.lab=find(h=>h.includes('koszt')&&h!=='koszt'); col.time=find(h=>h.includes('czas'));
+      let cur=null;
+      for (let r=2;r<=sh.rows;r++) {
+        const A = col.date ? sh.cell(r,col.date) : {v:null,mv:null,slave:false,master:false};
+        const own = [col.co,col.nm,col.oem,col.cost,col.unit].some(c=>get(r,c)!=null);
+        const lab = num(get(r,col.lab));
+        const startsNew = !A.slave && (A.v!=null && A.v!=='' || A.master);
+        if (!startsNew && !own && lab==null) continue;
+        if (startsNew || !cur) {
+          cur = { id:uid(), u:t, date:toISO(A.v ?? A.mv), km:num(get(r,col.km,true)), labor:null, time:'', parts:[] };
+          entries.push(cur);
+        }
+        if (lab!=null) cur.labor = round2((cur.labor||0)+lab);
+        const tm = str(get(r,col.time)); if (tm && !cur.time) cur.time = tm;
+        if (own) {
+          let oem = get(r,col.oem,true); if (typeof oem==='number' && Number.isInteger(oem)) oem=String(oem);
+          const qty = num(get(r,col.qty)) || 1, cost = num(get(r,col.cost));
+          let unit = num(get(r,col.unit)); if (unit==null && cost!=null) unit = round2(cost/qty);
+          cur.parts.push({ co:str(get(r,col.co,true)), name:str(get(r,col.nm,true)), oem:str(oem), qty, unit, cost: unit!=null ? round2(qty*unit) : cost });
+        }
+      }
+    } else {
+      type='other';
+      col.co=find(h=>h==='co'); col.nm=find(h=>h==='nazwa');
+      col.cost=find(h=>h==='koszt'); col.srv=find(h=>h.includes('koszt')&&h!=='koszt');
+      for (let r=2;r<=sh.rows;r++) {
+        const e={ id:uid(), u:t, date:toISO(get(r,col.date)), co:str(get(r,col.co)), name:str(get(r,col.nm)), cost:num(get(r,col.cost)), service:num(get(r,col.srv)) };
+        if (!e.co && !e.name && e.cost==null && e.service==null) continue;
+        entries.push(e);
+      }
+    }
+    out.push({ vehicle:veh, cat:catName, type, entries });
+  }
+  return out;
+}
+// ===== CORE-END =====
+</script>
+
+<script>
+// ===== UI =====
+const LS_DATA='garaz.data', LS_CFG='garaz.cfg', LS_UI='garaz.ui';
+const $ = s => document.querySelector(s);
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const zl = n => (n==null||n==='') ? '–' : Number(n).toLocaleString('pl-PL',{minimumFractionDigits:2,maximumFractionDigits:2})+'\u00a0zł';
+const kmf = n => n==null ? '' : Number(n).toLocaleString('pl-PL')+'\u00a0km';
+const dec = (n,d=1) => n==null ? '–' : Number(n).toLocaleString('pl-PL',{minimumFractionDigits:d,maximumFractionDigits:d});
+const dshow = d => { if(!d) return 'bez daty'; const [y,m,dd]=d.split('-'); return `${+dd}.${m}.${y}`; };
+const today = () => { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+
+function readJSON(k, def){ try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch { return def; } }
+function writeJSON(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){ toast('Nie udało się zapisać na urządzeniu: '+e.message); } }
+
+let state = readJSON(LS_DATA, emptyState());
+let cfg = readJSON(LS_CFG, {});
+let ui = readJSON(LS_UI, {});
+
+function touch(o){ o.u = Date.now(); return o; }
+function commit(){ writeJSON(LS_DATA, state); render(); scheduleSync(); }
+function saveUI(){ writeJSON(LS_UI, ui); }
+
+function curVehicle(){ const vs=alive(state.vehicles); return vs.find(v=>v.id===ui.v) || vs[0] || null; }
+function curCat(v){ const cs=alive(v.cats); return cs.find(c=>c.id===ui.c) || cs[0] || null; }
+
+let toastT;
+function toast(msg){
+  let el = $('.toast'); if (!el) { el=document.createElement('div'); el.className='toast'; el.setAttribute('role','status'); document.body.appendChild(el); }
+  el.textContent = msg; el.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>el.hidden=true, 3200);
+}
+
+// ---------- render ----------
+function render(){
+  const vs = alive(state.vehicles), v = curVehicle();
+  $('#plates').innerHTML = vs.map(x=>`<button class="plate" data-veh="${x.id}" aria-current="${v&&x.id===v.id}"><span class="eu">PL</span><span class="t">${esc(x.name)}</span></button>`).join('')
+    + `<button class="plate add" id="addVeh"><span class="t">+ Dodaj auto</span></button>`;
+  const main = $('#main');
+  if (!v) {
+    main.innerHTML = `<div class="empty hero-empty"><h2>Pusty garaż</h2><p>Dodaj pierwsze auto albo wczytaj swój dotychczasowy arkusz Excela.</p>
+      <div class="btnrow"><button class="primary" data-act="addVeh">Dodaj auto</button><button class="ghost" data-act="importX">Wczytaj arkusz .xlsx</button></div></div>`;
+    return;
+  }
+  const st = vehicleStats(v), cats = alive(v.cats), c = curCat(v);
+  const ledgerRows = cats.map(k=>{ const t=catTotals(k); return `<tr><td>${esc(k.name)}</td><td>${zl(t.total)}</td></tr>`+
+     (k.type!=='fuel' && t.b ? `<tr class="sub"><td colspan="2">części ${zl(t.a)}, serwis ${zl(t.b)}</td></tr>` : ''); }).join('');
+  let html = `<section class="vhead">
+    <div class="vtitle"><h1>${esc(v.name)}</h1>
+      <div class="vmeta">${st.maxKm!=null?`<span>Ostatni przebieg <b>${kmf(st.maxKm)}</b></span>`:''}${st.avg!=null?`<span>Średnie spalanie <b>${dec(st.avg)} l/100 km</b></span>`:''}</div>
+      <div class="vactions"><button class="linkbtn" data-act="editVeh">Zmień nazwę lub usuń auto</button></div>
+    </div>
+    <div class="ledger"><table>${ledgerRows}<tr class="total"><td>Razem</td><td>${zl(st.total)}</td></tr></table></div>
+  </section>
+  <div class="tabs" role="tablist">${cats.map(k=>`<button class="tab" role="tab" data-cat="${k.id}" aria-selected="${c&&k.id===c.id}">${esc(k.name)}</button>`).join('')}
+    <button class="tab addcat" data-act="addCat">+ Kategoria</button></div>`;
+  if (c) {
+    const t = catTotals(c);
+    const sums = c.type==='service' ? `<span>Części <b>${zl(t.a)}</b></span><span>Serwis <b>${zl(t.b)}</b></span>`
+      : c.type==='fuel' ? `<span>Paliwo <b>${zl(t.a)}</b></span><span>Zatankowano <b>${dec(t.liters,2)} l</b></span>${t.avg!=null?`<span>Śr. spalanie <b>${dec(t.avg)} l/100 km</b></span>`:''}`
+      : `<span>Koszt <b>${zl(t.a)}</b></span><span>Serwis <b>${zl(t.b)}</b></span>`;
+    html += `<div class="catbar"><div class="sums">${sums}</div><button class="linkbtn" data-act="editCat">Edytuj kategorię</button><button class="primary" data-act="addEntry">${c.type==='fuel'?'Dodaj tankowanie':c.type==='service'?'Dodaj serwis':'Dodaj wpis'}</button></div>`;
+    html += `<div class="list">${renderEntries(c)}</div>`;
+  } else {
+    html += `<div class="empty" style="margin-top:16px"><p>To auto nie ma jeszcze kategorii kosztów.</p><button class="primary" data-act="addCat">Dodaj kategorię</button></div>`;
+  }
+  main.innerHTML = html;
+}
+
+function renderEntries(c){
+  const es = alive(c.entries);
+  if (!es.length) return `<div class="empty"><p>Brak wpisów w tej kategorii.</p></div>`;
+  if (c.type==='service') {
+    return es.slice().sort((a,b)=>byDateAsc(b,a)).map(v=>{
+      const parts = v.parts||[]; const ps = parts.reduce((s,p)=>s+(partCost(p)||0),0);
+      return `<button class="card" data-entry="${v.id}">
+        <div class="vtop"><span class="date">${dshow(v.date)}</span>${v.km!=null?`<span class="km">${kmf(v.km)}</span>`:''}<span class="amt">${zl(ps+(v.labor||0))}</span></div>
+        ${parts.length?`<ul class="parts">${parts.map(p=>`<li><span class="co">${esc(p.co||'—')}</span><span class="nm">${esc(p.name)}</span>${p.oem?`<span class="oem">${esc(p.oem)}</span>`:''}<span class="pc">${partCost(p)!=null?zl(partCost(p)):''}${partQty(p)!==1&&partUnit(p)!=null?`<small>${dec(partQty(p),partQty(p)%1?2:0)} × ${zl(partUnit(p))}</small>`:''}</span></li>`).join('')}</ul>`:''}
+        <div class="vfoot"><span>Części <b>${zl(ps)}</b></span><span>Serwis <b>${zl(v.labor||0)}</b></span>${v.time?`<span>Czas własny <b>${esc(v.time)}</b></span>`:''}</div>
+      </button>`; }).join('');
+  }
+  if (c.type==='fuel') {
+    return fuelRows(es).reverse().map(x=>{ const e=x.e;
+      const base = e.liters==null;
+      return `<button class="card row" data-entry="${e.id}">
+        <span class="date">${dshow(e.date)}</span>
+        <span class="main">${base?'Stan licznika':`<span class="oct">${fuelOct(e)}</span>${dec(e.liters,2)} l × ${zl(e.price)}`}<span class="muted">${kmf(e.km)}${x.diff!=null?` (+${x.diff.toLocaleString('pl-PL')} km)`:''}</span></span>
+        <span class="amt">${base?'':zl(x.cost)}<small>${x.cons!=null?`${dec(x.cons)} l/100 km`:''}${e.computer!=null?`<br>komputer ${dec(e.computer)}`:''}</small></span>
+      </button>`; }).join('');
+  }
+  return es.slice().sort((a,b)=>byDateAsc(b,a)).map(e=>`<button class="card row" data-entry="${e.id}">
+      <span class="date">${dshow(e.date)}</span>
+      <span class="main">${esc(e.co||'—')}${e.name?`<span class="muted">${esc(e.name)}</span>`:''}</span>
+      <span class="amt">${zl((e.cost||0)+(e.service||0))}<small>${e.cost!=null&&e.service!=null?`koszt ${zl(e.cost)}, serwis ${zl(e.service)}`:e.service!=null?'serwis':''}</small></span>
+    </button>`).join('');
+}
+
+// ---------- dialogs ----------
+const dlg = $('#dlg');
+function openDlg(title, body, footer, onSubmit){
+  dlg.innerHTML = `<form class="dlg" novalidate><header><h3>${esc(title)}</h3><button type="button" class="x" aria-label="Zamknij" data-close>×</button></header>
+    <div class="body">${body}</div>${footer!==null?`<footer>${footer}</footer>`:''}</form>`;
+  const form = dlg.querySelector('form');
+  form.addEventListener('submit', e=>{ e.preventDefault(); if (onSubmit && onSubmit(form)!==false) dlg.close(); });
+  dlg.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>dlg.close());
+  dlg.showModal();
+  const first = dlg.querySelector('.body input:not([type=hidden]), .body select');
+  if (first && matchMedia('(pointer:fine)').matches) first.focus();
+  return form;
+}
+const fld = (label,name,val,attrs='',cls='') => `<label class="f ${cls}"><span>${label}</span><input name="${name}" value="${esc(val??'')}" ${attrs}></label>`;
+const nfld = (label,name,val,cls='') => fld(label,name,val==null?'':String(val).replace('.',','),'inputmode="decimal" autocomplete="off"',cls);
+const footerStd = (del) => `${del?`<button type="button" class="danger" data-del>Usuń</button>`:''}<span class="spacer"></span><button type="button" class="ghost" data-close>Anuluj</button><button class="primary">Zapisz</button>`;
+const fv = (form,n) => { const el=form.elements[n]; return el ? el.value.trim() : ''; };
+
+function vehicleDlg(v){
+  const f = openDlg(v?'Edytuj auto':'Nowe auto', fld('Nazwa auta','name',v?.name,'required autocomplete="off" placeholder="np. Yaris"','wide') +
+    (v?'':`<p class="hint">Auto dostanie od razu kategorie Serwis, Paliwo i Inne. Możesz je zmienić i dodać kolejne.</p>`),
+    footerStd(!!v), form=>{
+      const name=fv(form,'name'); if(!name){ toast('Wpisz nazwę auta.'); return false; }
+      if (v) { v.name=name; touch(v); }
+      else { const nv=newVehicle(name); state.vehicles.push(nv); ui.v=nv.id; ui.c=nv.cats[0].id; saveUI(); }
+      commit();
+    });
+  const d=f.querySelector('[data-del]');
+  if (d) d.onclick=()=>{ if(confirm(`Usunąć auto „${v.name}” razem ze wszystkimi wpisami?`)){ v.del=true; touch(v); dlg.close(); commit(); } };
+}
+function catDlg(v,c){
+  const f = openDlg(c?'Edytuj kategorię':'Nowa kategoria',
+    `<div class="grid">${fld('Nazwa kategorii','name',c?.name,'required autocomplete="off" placeholder="np. Ubezpieczenie"')}
+     <label class="f"><span>Rodzaj wpisów</span><select name="type" ${c&&alive(c.entries).length?'disabled':''}>
+      ${Object.entries(TYPES).map(([k,l])=>`<option value="${k}" ${(c?c.type:'other')===k?'selected':''}>${l}</option>`).join('')}</select></label></div>
+     <p class="hint">Serwis: wizyta z listą części, kosztem serwisu i czasem. Paliwo: tankowania ze spalaniem. Inne: proste wpisy z kosztem i kosztem serwisu (np. myjnia, przegląd, ubezpieczenie).</p>`,
+    footerStd(!!c), form=>{
+      const name=fv(form,'name'); if(!name){ toast('Wpisz nazwę kategorii.'); return false; }
+      if (c) { c.name=name; if(!form.elements.type.disabled) c.type=form.elements.type.value; touch(c); }
+      else { const nc={id:uid(),u:Date.now(),name,type:form.elements.type.value,entries:[]}; v.cats.push(nc); ui.c=nc.id; saveUI(); }
+      commit();
+    });
+  const d=f.querySelector('[data-del]');
+  if (d) d.onclick=()=>{ if(confirm(`Usunąć kategorię „${c.name}” i wszystkie jej wpisy?`)){ c.del=true; touch(c); dlg.close(); commit(); } };
+}
+
+function suggestions(v){
+  const co=new Map();
+  for (const c of alive(v.cats)) for (const e of alive(c.entries)) {
+    if (c.type==='service') for (const p of (e.parts||[])) { if (p.co) co.set(p.co.toLowerCase(), {co:p.co, name:p.name, oem:p.oem, unit:partUnit(p), kind:'part'}); }
+    else if (c.type==='other' && e.co) co.set(e.co.toLowerCase()+'|o', {co:e.co, name:e.name, kind:'other'});
+  }
+  return [...co.values()];
+}
+
+function partRow(p={}){
+  return `<div class="prow">${fld('Co','co',p.co,'list="dlCo" autocomplete="off" placeholder="np. Filtr oleju"')}${fld('Nazwa','nm',p.name,'autocomplete="off"','nm')}
+    <label class="f oem"><span>Kod OEM</span><textarea name="oem" rows="1">${esc(p.oem||'')}</textarea></label>${nfld('Ilość','qty',p.co||p.name||p.cost!=null?partQty(p):1)}${nfld('Cena za szt.','unit',partUnit(p))}
+    <button type="button" class="rm" aria-label="Usuń pozycję" title="Usuń pozycję">×</button><div class="ptot"></div></div>`;
+}
+
+function entryDlg(v,c,e){
+  const isNew=!e; e = e || {};
+  const sugg = suggestions(v);
+  let body='', onSave;
+  if (c.type==='service') {
+    body = `<div class="grid">${fld('Data','date',e.date||today(),'type="date"')}${nfld('Przebieg (km)','km',e.km)}${nfld('Serwis koszt (robocizna)','labor',e.labor)}${fld('Wymiana czas (własny)','time',e.time,'autocomplete="off" placeholder="np. 1h"')}</div>
+      <p class="sectionlabel">Części i materiały</p><div class="prows" id="prows">${(e.parts&&e.parts.length?e.parts:[{}]).map(partRow).join('')}</div>
+      <p><button type="button" class="ghost" id="addPart">+ Dodaj pozycję</button></p><div class="calc" id="scalc"></div>
+      <datalist id="dlCo">${sugg.filter(s=>s.kind==='part').map(s=>`<option value="${esc(s.co)}">`).join('')}</datalist>
+      <p class="hint">Po wybraniu „Co” z podpowiedzi nazwa, kod OEM i cena za sztukę uzupełnią się z ostatniego takiego wpisu. Koszt pozycji to ilość × cena za sztukę.</p>`;
+    onSave = form=>{
+      const parts=[...form.querySelectorAll('.prow')].map(r=>{ const qty=num(r.querySelector('[name=qty]').value)||1, unit=num(r.querySelector('[name=unit]').value);
+          return { co:r.querySelector('[name=co]').value.trim(), name:r.querySelector('[name=nm]').value.trim(), oem:r.querySelector('[name=oem]').value.trim(), qty, unit, cost: unit!=null ? round2(qty*unit) : null }; })
+        .filter(p=>p.co||p.name||p.oem||p.unit!=null);
+      return { date:fv(form,'date'), km:num(fv(form,'km')), labor:num(fv(form,'labor')), time:fv(form,'time'), parts };
+    };
+  } else if (c.type==='fuel') {
+    const tot = e.liters!=null&&e.price!=null ? round2(e.liters*e.price) : null;
+    body = `<div class="grid">${fld('Data','date',e.date||today(),'type="date"')}${nfld('Przebieg (km)','km',e.km)}${nfld('Ilość litrów','liters',e.liters)}${nfld('Cena za litr','price',e.price)}${nfld('Kwota (zł)','total',tot)}${nfld('Spalanie z komputera','computer',e.computer)}</div>
+      <div class="f octs"><span>Paliwo</span><div class="seg" role="radiogroup" aria-label="Oktany">${[95,98,100].map(o=>`<label><input type="radio" name="oct" value="${o}" ${fuelOct(e)===o?'checked':''}><span>${o}</span></label>`).join('')}</div></div>
+      <div class="calc" id="calc"></div>
+      <p class="hint">Wpisz cenę za litr albo całą kwotę – drugie pole policzy się samo. Spalanie liczone jest jak w arkuszu: litry z tego tankowania na kilometry od poprzedniego. Wpis bez litrów to sam stan licznika (np. punkt startowy).</p>`;
+    onSave = form=>({ date:fv(form,'date'), km:num(fv(form,'km')), liters:num(fv(form,'liters')), price:num(fv(form,'price')), computer:num(fv(form,'computer')), octane:Number(fv(form,'oct'))||95 });
+  } else {
+    body = `<div class="grid">${fld('Data','date',e.date||today(),'type="date"')}${fld('Co','co',e.co,'list="dlCo" autocomplete="off" placeholder="np. Myjnia"')}${fld('Nazwa / gdzie','name',e.name,'autocomplete="off"','wide')}${nfld('Koszt','cost',e.cost)}${nfld('Koszt serwis','service',e.service)}</div>
+      <datalist id="dlCo">${[...new Set(sugg.filter(s=>s.kind==='other').map(s=>s.co))].map(s=>`<option value="${esc(s)}">`).join('')}</datalist>`;
+    onSave = form=>({ date:fv(form,'date'), co:fv(form,'co'), name:fv(form,'name'), cost:num(fv(form,'cost')), service:num(fv(form,'service')) });
+  }
+  const title = (isNew?'Nowy wpis':'Edytuj wpis')+': '+c.name;
+  const form = openDlg(title, body, footerStd(!isNew), form=>{
+    const data = onSave(form);
+    if (isNew) { c.entries.push({ id:uid(), u:Date.now(), ...data }); }
+    else { Object.assign(e, data); touch(e); }
+    commit(); toast(isNew?'Wpis dodany.':'Zmiany zapisane.');
+  });
+  const d=form.querySelector('[data-del]');
+  if (d) d.onclick=()=>{ if(confirm('Usunąć ten wpis?')){ e.del=true; touch(e); dlg.close(); commit(); toast('Wpis usunięty.'); } };
+
+  if (c.type==='service') {
+    const box=form.querySelector('#prows');
+    form.querySelector('#addPart').onclick=()=>{ box.insertAdjacentHTML('beforeend',partRow()); box.lastElementChild.querySelector('input').focus(); };
+    box.addEventListener('click',ev=>{ const b=ev.target.closest('.rm'); if(b){ b.closest('.prow').remove(); if(!box.children.length) box.insertAdjacentHTML('beforeend',partRow()); } });
+    const scalc=form.querySelector('#scalc');
+    const supd=()=>{ let sum=0;
+      box.querySelectorAll('.prow').forEach(r=>{ const q=num(r.querySelector('[name=qty]').value)||1, u=num(r.querySelector('[name=unit]').value);
+        const t=r.querySelector('.ptot'); if(u!=null){ sum+=q*u; t.innerHTML=`Koszt <b>${zl(round2(q*u))}</b>`; } else t.textContent=''; });
+      const lab=num(form.elements.labor.value)||0;
+      scalc.innerHTML=`Części razem <b>${zl(round2(sum))}</b>, z serwisem <b>${zl(round2(sum+lab))}</b>`; };
+    form.addEventListener('input',supd); box.addEventListener('click',()=>setTimeout(supd)); supd();
+    box.addEventListener('change',ev=>{
+      if (ev.target.name!=='co') return;
+      const s = sugg.find(x=>x.kind==='part' && x.co.toLowerCase()===ev.target.value.trim().toLowerCase()); if(!s) return;
+      const row=ev.target.closest('.prow');
+      const nm=row.querySelector('[name=nm]'), oem=row.querySelector('[name=oem]');
+      if(!nm.value && s.name) nm.value=s.name; if(!oem.value && s.oem) oem.value=s.oem; const un=row.querySelector('[name=unit]'); if(!un.value && s.unit!=null){ un.value=String(s.unit).replace('.',','); un.dispatchEvent(new Event('input',{bubbles:true})); }
+    });
+  }
+  if (c.type==='fuel') {
+    const L=form.elements.liters, P=form.elements.price, T=form.elements.total, K=form.elements.km, calc=form.querySelector('#calc');
+    const rows = fuelRows(c.entries.filter(x=>x!==e));
+    const upd=()=>{
+      const km=num(K.value), l=num(L.value);
+      const prev = rows.filter(r=>r.e.km!=null && km!=null && r.e.km<km).pop();
+      const diff = prev ? km-prev.e.km : null;
+      const parts=[];
+      if (num(T.value)!=null) parts.push(`Koszt <b>${zl(num(T.value))}</b>`);
+      if (diff!=null) parts.push(`od poprzedniego <b>${diff.toLocaleString('pl-PL')} km</b>`);
+      if (diff>0 && l>0) parts.push(`spalanie <b>${dec(l/diff*100)} l/100 km</b>`);
+      calc.innerHTML = parts.join(', ') || 'Wpisz przebieg i litry, a pokażę koszt i spalanie.';
+    };
+    L.addEventListener('input',()=>{ const l=num(L.value),p=num(P.value); if(l!=null&&p!=null) T.value=String(round2(l*p)).replace('.',','); upd(); });
+    P.addEventListener('input',()=>{ const l=num(L.value),p=num(P.value); if(l!=null&&p!=null) T.value=String(round2(l*p)).replace('.',','); upd(); });
+    T.addEventListener('input',()=>{ const l=num(L.value),t=num(T.value); if(l>0&&t!=null) P.value=String(Math.round(t/l*1000)/1000).replace('.',','); upd(); });
+    K.addEventListener('input',upd); upd();
+  }
+}
+
+// ---------- sync (GitHub Gist) ----------
+let syncing=false, pending=false, syncTimer=null, lastSync=null, syncErr=null;
+function setSync(kind, txt){ $('#syncDot').className='dot '+kind; $('#syncTxt').textContent=txt; }
+function refreshSyncLabel(){
+  if (!cfg.token) return setSync('','Tylko lokalnie');
+  if (syncing) return setSync('busy','Synchronizuję…');
+  if (syncErr) return setSync('err','Błąd synchronizacji');
+  if (lastSync) return setSync('ok','Zsynchronizowano '+lastSync.toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'}));
+  setSync('','Połączono z gistem');
+}
+function scheduleSync(){ if(!cfg.token) return; clearTimeout(syncTimer); syncTimer=setTimeout(sync,1200); }
+async function gh(method, path, body){
+  const res = await fetch('https://api.github.com'+path, { method, cache:'no-store',
+    headers:{ 'Authorization':'Bearer '+cfg.token, 'Accept':'application/vnd.github+json', ...(body?{'Content-Type':'application/json'}:{}) },
+    body: body?JSON.stringify(body):undefined });
+  if (!res.ok) {
+    let msg = res.status===401 ? 'GitHub odrzucił token. Sprawdź, czy jest aktualny i ma uprawnienie do gistów.'
+      : res.status===404 ? 'Nie znaleziono gista. Sprawdź ID albo zostaw pole puste.'
+      : res.status===403 ? 'Brak uprawnień albo limit zapytań GitHuba. Spróbuj za chwilę.' : 'GitHub zwrócił błąd '+res.status+'.';
+    throw new Error(msg);
+  }
+  return res.status===204 ? null : res.json();
+}
+async function findOrCreateGist(){
+  for (let page=1; page<=5; page++) {
+    const list = await gh('GET','/gists?per_page=100&page='+page);
+    const g = list.find(x=>x.files && x.files[FILE_NAME]);
+    if (g) return g.id;
+    if (list.length<100) break;
+  }
+  const g = await gh('POST','/gists',{ description:'Garaż – koszty pojazdów (dane aplikacji)', public:false, files:{ [FILE_NAME]:{ content: JSON.stringify(state) } } });
+  return g.id;
+}
+async function sync(){
+  if (!cfg.token) return;
+  if (syncing) { pending=true; return; }
+  syncing=true; syncErr=null; refreshSyncLabel();
+  try {
+    if (!cfg.gistId) { cfg.gistId = await findOrCreateGist(); writeJSON(LS_CFG,cfg); }
+    const g = await gh('GET','/gists/'+cfg.gistId);
+    const f = g.files && g.files[FILE_NAME];
+    let remote = emptyState();
+    if (f) {
+      let txt = f.content;
+      if (f.truncated) txt = await (await fetch(f.raw_url,{cache:'no-store'})).text();
+      try { remote = JSON.parse(txt||'{}'); if(!remote.vehicles) remote=emptyState(); } catch { remote = emptyState(); }
+    }
+    const merged = mergeState(state, remote);
+    const ms = JSON.stringify(merged);
+    if (ms !== JSON.stringify(remote)) await gh('PATCH','/gists/'+cfg.gistId,{ files:{ [FILE_NAME]:{ content: ms } } });
+    if (ms !== JSON.stringify(state)) { state = merged; writeJSON(LS_DATA,state); if (!dlg.open) render(); }
+    lastSync = new Date();
+  } catch(e) { syncErr = e.message; }
+  finally {
+    syncing=false; refreshSyncLabel();
+    if (pending) { pending=false; sync(); }
+  }
+}
+
+function syncDlg(){
+  const connected = !!cfg.token;
+  const f = openDlg('Synchronizacja', `
+    <div class="status-line"><span class="dot ${syncErr?'err':connected?'ok':''}"></span><span>${syncErr?esc(syncErr):connected?`Połączono z gistem ${esc(cfg.gistId||'')}`:'Dane są tylko na tym urządzeniu.'}</span></div>
+    <div class="grid">${fld('Token GitHuba','token',cfg.token,'type="password" autocomplete="off" spellcheck="false" placeholder="ghp_… lub github_pat_…"','wide')}
+    ${fld('ID gista (opcjonalnie)','gist',cfg.gistId,'autocomplete="off" spellcheck="false" placeholder="zostaw puste – znajdę lub utworzę"','wide')}</div>
+    <ol class="steps">
+      <li>Wejdź na <a href="https://github.com/settings/tokens/new?scopes=gist&description=Garaz%20-%20koszty%20pojazdow" target="_blank" rel="noopener">github.com/settings/tokens</a> i utwórz token (classic) z zaznaczonym tylko uprawnieniem <b>gist</b>.</li>
+      <li>Wklej go tutaj i kliknij „Połącz”. Aplikacja znajdzie swój prywatny gist albo go utworzy.</li>
+      <li>Na każdym kolejnym urządzeniu wklej ten sam token – dane scalą się automatycznie.</li>
+    </ol>
+    <p class="hint">Token jest zapisany tylko w przeglądarce na tym urządzeniu. Gist jest prywatny (niepubliczny), ale każdy, kto zna jego link, może go odczytać.</p>`,
+    `${connected?`<button type="button" class="danger" data-off>Rozłącz</button>`:''}<span class="spacer"></span>${connected?`<button type="button" class="ghost" data-now>Synchronizuj teraz</button>`:''}<button class="primary">Połącz</button>`,
+    form=>{
+      const t=fv(form,'token'), g=fv(form,'gist');
+      if (!t) { toast('Wklej token GitHuba.'); return false; }
+      cfg={ token:t, gistId: g ? g.replace(/^.*\//,'') : '' }; writeJSON(LS_CFG,cfg); syncErr=null; lastSync=null;
+      sync().then(()=>toast(syncErr?syncErr:'Połączono. Synchronizacja włączona.'));
+    });
+  const off=f.querySelector('[data-off]');
+  if (off) off.onclick=()=>{ if(confirm('Rozłączyć to urządzenie? Dane zostaną lokalnie, ale przestaną się synchronizować.')){ cfg={}; writeJSON(LS_CFG,cfg); syncErr=null; lastSync=null; refreshSyncLabel(); dlg.close(); } };
+  const now=f.querySelector('[data-now]');
+  if (now) now.onclick=()=>{ dlg.close(); sync().then(()=>toast(syncErr||'Zsynchronizowano.')); };
+}
+
+// ---------- Excel ----------
+let excelPromise=null;
+function loadExcel(){
+  if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
+  if (!excelPromise) excelPromise = new Promise((res,rej)=>{
+    const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+    s.onload=()=>res(window.ExcelJS); s.onerror=()=>{ excelPromise=null; rej(new Error('Nie udało się wczytać modułu Excela. Sprawdź połączenie z internetem.')); };
+    document.head.appendChild(s);
+  });
+  return excelPromise;
+}
+async function exportXlsx(){
+  try {
+    if (!alive(state.vehicles).length) return toast('Najpierw dodaj auto.');
+    const ExcelJS = await loadExcel();
+    const wb = new ExcelJS.Workbook(); wb.creator='Garaż';
+    for (const sh of buildSpec(state)) {
+      const ws = wb.addWorksheet(sh.name, { views:[{ state:'frozen', ySplit:1 }] });
+      ws.columns = sh.widths.map(w=>({ width:w }));
+      sh.rows.forEach((row,ri)=>{ (row||[]).forEach((cell,ci)=>{
+        if (!cell) return;
+        const c = ws.getCell(ri+1, ci+1);
+        if (cell.f) c.value = { formula:cell.f, result:cell.r };
+        else if (cell.t==='date') { const [y,m,d]=cell.v.split('-').map(Number); c.value = new Date(Date.UTC(y,m-1,d)); }
+        else c.value = cell.v;
+        if (cell.fmt) c.numFmt = cell.fmt;
+        c.font = { name:'Arial', size:10, bold:!!cell.b };
+        c.alignment = { vertical:'middle', horizontal: cell.t==='date' ? 'left' : undefined, wrapText:!!cell.wrap };
+        if (cell.fill) c.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:cell.fill } };
+      }); });
+      for (const m of sh.merges) ws.mergeCells(m);
+    }
+    const buf = await wb.xlsx.writeBuffer();
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+    a.download=`Pojazdy - Koszta ${today()}.xlsx`; document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+    toast('Arkusz pobrany.');
+  } catch(e){ toast(e.message); }
+}
+function normX(v){
+  if (v===null || v===undefined) return null;
+  if (v instanceof Date) return v;
+  if (typeof v==='object') {
+    if ('result' in v) return normX(v.result);
+    if (v.richText) return v.richText.map(t=>t.text).join('');
+    if ('text' in v) return v.text;
+    return null;
+  }
+  if (typeof v==='string' && v.trim()==='') return null;
+  return v;
+}
+async function importXlsx(file){
+  try {
+    const ExcelJS = await loadExcel();
+    const wb = new ExcelJS.Workbook(); await wb.xlsx.load(await file.arrayBuffer());
+    const sheets = wb.worksheets.map(ws=>({ name:ws.name, rows:ws.rowCount, cols:ws.columnCount, cell(r,c){
+      const x=ws.getCell(r,c); const slave = x.isMerged && x.master.address!==x.address; const master = x.isMerged && !slave;
+      const v = slave ? null : normX(x.value); return { v, mv: slave ? normX(x.master.value) : v, slave, master };
+    }}));
+    const parsed = parseSheets(sheets);
+    if (!parsed.length) return toast('Nie znalazłem w pliku arkuszy z kosztami.');
+    const lines = parsed.map(p=>`• ${p.vehicle} – ${p.cat}: ${p.entries.length} wpis(ów)`).join('\n');
+    if (!confirm(`Wczytać dane z arkusza?\n\n${lines}\n\nKategorie o tych samych nazwach zostaną zastąpione danymi z pliku.`)) return;
+    const t=Date.now();
+    for (const p of parsed) {
+      let v = alive(state.vehicles).find(x=>x.name.toLowerCase()===p.vehicle.toLowerCase());
+      if (!v) { v = newVehicle(p.vehicle); state.vehicles.push(v); }
+      let c = alive(v.cats).find(x=>x.name.toLowerCase()===p.cat.toLowerCase())
+           || alive(v.cats).find(x=>x.type===p.type && !alive(x.entries).length && Object.values(TYPES).includes(x.name));
+      if (!c) { c={ id:uid(), u:t, name:p.cat, type:p.type, entries:[] }; v.cats.push(c); }
+      for (const e of c.entries) if (!e.del) { e.del=true; e.u=t; }
+      c.name=p.cat; c.type=p.type; c.u=t;
+      c.entries.push(...p.entries);
+    }
+    commit(); toast('Dane z arkusza wczytane.');
+  } catch(e){ toast('Nie udało się wczytać pliku: '+e.message); }
+}
+function dataDlg(){
+  openDlg('Excel i kopie danych', `<div class="menu">
+    <button type="button" data-a="exp">Eksportuj do Excela<span>Arkusz w układzie jak dotąd: osobna zakładka dla każdego auta i kategorii, plus podsumowanie.</span></button>
+    <button type="button" data-a="imp">Wczytaj arkusz Excela<span>Przeniesie wpisy z Twojego dotychczasowego pliku .xlsx (zakładki „Auto - Kategoria”).</span></button>
+    <button type="button" data-a="jexp">Pobierz kopię zapasową (.json)<span>Pełna kopia danych aplikacji.</span></button>
+    <button type="button" data-a="jimp">Wczytaj kopię zapasową (.json)<span>Scali kopię z obecnymi danymi.</span></button></div>`, null);
+  dlg.querySelector('.menu').onclick=ev=>{
+    const a=ev.target.closest('[data-a]')?.dataset.a; if(!a) return; dlg.close();
+    if (a==='exp') exportXlsx();
+    if (a==='imp') $('#fileXlsx').click();
+    if (a==='jimp') $('#fileJson').click();
+    if (a==='jexp') { const b=new Blob([JSON.stringify(state,null,1)],{type:'application/json'}); const l=document.createElement('a'); l.href=URL.createObjectURL(b); l.download=`garaz-kopia-${today()}.json`; document.body.appendChild(l); l.click(); setTimeout(()=>{URL.revokeObjectURL(l.href); l.remove();},2000); }
+  };
+}
+
+// ---------- events ----------
+document.addEventListener('click', ev=>{
+  const t = ev.target.closest('[data-veh],[data-cat],[data-act],[data-entry],#addVeh');
+  if (!t || dlg.contains(t)) return;
+  const v = curVehicle(), c = v && curCat(v);
+  if (t.id==='addVeh') return vehicleDlg(null);
+  if (t.dataset.veh) { ui.v=t.dataset.veh; ui.c=null; saveUI(); return render(); }
+  if (t.dataset.cat) { ui.c=t.dataset.cat; saveUI(); return render(); }
+  if (t.dataset.entry) { const e=c.entries.find(x=>x.id===t.dataset.entry); if(e) entryDlg(v,c,e); return; }
+  const a=t.dataset.act;
+  if (a==='addVeh') vehicleDlg(null);
+  if (a==='importX') $('#fileXlsx').click();
+  if (a==='editVeh') vehicleDlg(v);
+  if (a==='addCat') catDlg(v,null);
+  if (a==='editCat') catDlg(v,c);
+  if (a==='addEntry') entryDlg(v,c,null);
+});
+$('#syncBtn').onclick = syncDlg;
+$('#dataBtn').onclick = dataDlg;
+$('#fileXlsx').onchange = e=>{ const f=e.target.files[0]; e.target.value=''; if(f) importXlsx(f); };
+$('#fileJson').onchange = async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  try { const d=JSON.parse(await f.text()); if(!Array.isArray(d.vehicles)) throw new Error('to nie jest kopia z tej aplikacji');
+    state = mergeState(state,d); commit(); toast('Kopia wczytana.'); } catch(err){ toast('Nie udało się wczytać kopii: '+err.message); }
+};
+document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState==='visible') sync(); });
+window.addEventListener('online', sync);
+setInterval(()=>{ if (document.visibilityState==='visible') sync(); }, 60000);
+window.addEventListener('storage', ev=>{ if (ev.key===LS_DATA) { state=readJSON(LS_DATA,emptyState()); render(); } });
+
+render(); refreshSyncLabel(); sync();
+</script>
+</body>
+</html>
