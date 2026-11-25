@@ -166,6 +166,38 @@ div.card{cursor:pointer}
 .chk{flex-direction:row;align-items:center;gap:10px;color:var(--ink);font-size:15px}
 .chk input{width:20px;height:20px;accent-color:var(--accent)}
 [hidden]{display:none!important}
+.vbar{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 22px;margin-bottom:14px}
+.vbar h1{font:700 40px/1 var(--cond);margin:4px 0;letter-spacing:.01em}
+.vbar .vactions{margin-top:0;margin-left:auto;gap:14px}
+@media (max-width:560px){.vbar .vactions{margin-left:0;width:100%}}
+.sumgrid{display:grid;grid-template-columns:minmax(260px,360px) 1fr;gap:18px;align-items:start;margin:18px 0}
+@media (max-width:720px){.sumgrid{grid-template-columns:1fr}}
+.side{display:flex;flex-direction:column;gap:14px}
+.side .upcoming{margin-top:0}
+.upcoming p.muted{margin:2px 0 4px}
+.lk{background:none;border:0;padding:0;font:inherit;color:inherit;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+.lk:hover{text-decoration-color:var(--ink)}
+.uprow.rec{display:grid;grid-template-columns:78px 1fr auto;gap:10px;align-items:baseline}
+.uprow.rec .rd{font:600 15px var(--cond)} .uprow.rec .rt{min-width:0}
+.extras{display:flex;flex-wrap:wrap;gap:2px 12px;font-size:13px;color:var(--muted);margin-top:2px}
+.parts .extras{grid-column:2}
+@media (max-width:560px){.parts .extras{grid-column:1}}
+.olink{color:var(--eu);font-weight:600;text-decoration:none}
+@media (prefers-color-scheme:dark){.olink{color:#8fb4ff}}
+.olink:hover{text-decoration:underline}
+.wb{font-weight:600;color:var(--ok)} .wb.soon{color:#b07d00} .wb.exp{color:var(--muted);font-weight:400}
+@media (prefers-color-scheme:dark){.wb.soon{color:var(--accent)}}
+.pmore{grid-column:1/-1;margin-top:2px}
+.pmore *{box-sizing:border-box}
+.pmore summary{cursor:pointer;color:var(--muted);font-size:14px;padding:4px 0}
+.pmore .grid{margin-top:8px}
+.wrow{display:flex;gap:6px}
+.wrow input{flex:1;min-width:0}
+.wrow select{width:auto;flex:none;max-width:120px}
+.grid>*{min-width:0}
+.pmore .grid{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.whint{grid-column:1/-1;margin:0}
+.sdot.good{background:var(--ok)}
 .checks{display:flex;flex-direction:column;gap:6px;margin-top:8px}
 .checks .chk{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;background:var(--surface2);border-radius:8px;font-size:15px}
 .checks .chk input{margin-top:2px}
@@ -410,14 +442,31 @@ function costItems(v){
   for (const c of alive(v.cats)) {
     const es=alive(c.entries);
     if (c.type==='service') for (const e of es) {
-      if (e.labor) out.push({ date:e.date||'', cat:c, kind:'serwis', amount:e.labor });
-      for (const p of (e.parts||[])) { const pc=partCost(p); if (pc) out.push({ date:p.bought||e.date||'', cat:c, kind:'czesci', amount:pc }); }
-    } else if (c.type==='fuel') { for (const r of fuelRows(es)) if (r.cost) out.push({ date:r.e.date||'', cat:c, kind:'paliwo', amount:r.cost }); }
-    else for (const e of es) { const a=oamt(e); if (a) out.push({ date:e.date||'', cat:c, kind:okind(e), amount:a }); }
+      if (e.labor) out.push({ date:e.date||'', cat:c, kind:'serwis', amount:e.labor, title:'Robocizna serwisu', e });
+      for (const p of (e.parts||[])) { const pc=partCost(p); if (pc) out.push({ date:p.bought||e.date||'', cat:c, kind:'czesci', amount:pc, title:p.co||p.name||'Część', e }); }
+    } else if (c.type==='fuel') { for (const r of fuelRows(es)) if (r.cost) out.push({ date:r.e.date||'', cat:c, kind:'paliwo', amount:r.cost, title:`Tankowanie ${fuelOct(r.e)}`, e:r.e }); }
+    else for (const e of es) { const a=oamt(e); if (a) out.push({ date:e.date||'', cat:c, kind:okind(e), amount:a, title:e.co||e.name||'Wpis', e }); }
   }
-  for (const g of alive(v.tires)) { const tc=tireCost(g); if (tc) out.push({ date:g.bought||'', cat:TIRES_CAT, kind:'czesci', amount:tc }); }
-  for (const sw of alive(v.tswaps)) if (sw.cost) out.push({ date:sw.date||'', cat:TIRES_CAT, kind:'serwis', amount:sw.cost });
+  for (const g of alive(v.tires)) { const tc=tireCost(g); if (tc) out.push({ date:g.bought||'', cat:TIRES_CAT, kind:'czesci', amount:tc, title:'Opony: '+g.name }); }
+  for (const sw of alive(v.tswaps)) if (sw.cost) out.push({ date:sw.date||'', cat:TIRES_CAT, kind:'serwis', amount:sw.cost, title:'Wymiana opon' });
   return out;
+}
+// --- gwarancje: długość w miesiącach, start domyślnie od daty zakupu ---
+function warrantyOf(o, purchase, todayISO){
+  if (!o || !o.wMonths) return null;
+  const start = o.wStart || purchase;
+  if (!start) return { noStart:true };
+  const end = addMonths(start, o.wMonths), days = daysBetween(todayISO, end);
+  return { start, end, days, level: days<0 ? 'exp' : days<=30 ? 'soon' : 'ok' };
+}
+function warrantyList(v, todayISO){
+  const out=[];
+  for (const c of alive(v.cats)) for (const e of alive(c.entries)) {
+    if (c.type==='service') for (const p of (e.parts||[])) { const w=warrantyOf(p, p.bought||e.date, todayISO); if (w && w.end) out.push({ title:p.co||p.name||'Część', sub:p.name, w, cat:c, e }); }
+    else if (c.type==='other') { const w=warrantyOf(e, e.date, todayISO); if (w && w.end) out.push({ title:e.co||e.name||'Wpis', sub:e.name, w, cat:c, e }); }
+  }
+  for (const g of alive(v.tires)) { if (!tireActive(g)) continue; const w=warrantyOf(g, g.bought, todayISO); if (w && w.end) out.push({ title:'Opony: '+g.name, w, cat:TIRES_CAT, tire:g }); }
+  return out.sort((a,b)=>a.w.end.localeCompare(b.w.end));
 }
 function rangeTotals(v, range){
   const byCat=new Map(); let total=0, fuel=0;
@@ -564,7 +613,7 @@ function buildSpec(state, todayISO){
 }
 function tiresSheet(v){
   const rows=[], curKm=vehicleStats(v).maxKm, ts=tireStats(v,curKm), groups=alive(v.tires);
-  ['Data zakupu','Opony','Sezon','Rozmiar','DOT / rok','Ilość','Wycofane','Cena za szt.','Inne koszty','Koszt','Przejechane','Teraz','Notatki']
+  ['Data zakupu','Opony','Sezon','Rozmiar','DOT / rok','Ilość','Wycofane','Cena za szt.','Inne koszty','Koszt','Przejechane','Teraz','Notatki','Gdzie kupione','Link','Gwarancja do']
     .forEach((h,i)=>setCell(rows,0,i,{v:h,...HEAD}));
   let r=1, buy=0;
   for (const g of groups.slice().sort((a,b)=>(a.bought||'').localeCompare(b.bought||''))) {
@@ -579,23 +628,26 @@ function tiresSheet(v){
     setCell(rows,r,10,{v:ts.km.get(g.id)||0,fmt:FMT.km});
     setCell(rows,r,11,{v: tireActive(g)===0 ? 'wycofane' : ts.current.has(g.id) ? 'na aucie' : (g.storage ? 'przechowywane: '+g.storage : 'zdjęte'), wrap:true});
     if (g.note) setCell(rows,r,12,{v:g.note,wrap:true});
+    if (g.shop) setCell(rows,r,13,{v:g.shop,wrap:true});
+    if (g.url) setCell(rows,r,14,{v:g.url,link:true});
+    const w=warrantyOf(g, g.bought, '2000-01-01'); if (w && w.end) setCell(rows,r,15,dateCell(w.end));
     buy+=tc||0; r++;
   }
-  ['Data zmiany','Przebieg','Założone opony','Koszt wymiany','Notatki'].forEach((h,i)=>setCell(rows,0,14+i,{v:h,...HEAD}));
+  const S=17; ['Data zmiany','Przebieg','Założone opony','Koszt wymiany','Notatki'].forEach((h,i)=>setCell(rows,0,S+i,{v:h,...HEAD}));
   let sr=1, sw=0;
   for (const s of ts.swaps) {
-    setCell(rows,sr,14,dateCell(s.date)); if (s.km!=null) setCell(rows,sr,15,{v:s.km,fmt:FMT.km});
-    setCell(rows,sr,16,{v:swapMounted(s).map(id=>{ const g=(v.tires||[]).find(x=>x.id===id); return g?g.name:'?'; }).join(' + '),wrap:true});
-    if (s.cost) { setCell(rows,sr,17,{v:s.cost,fmt:FMT.pln}); sw+=s.cost; }
-    if (s.note) setCell(rows,sr,18,{v:s.note,wrap:true});
+    setCell(rows,sr,S,dateCell(s.date)); if (s.km!=null) setCell(rows,sr,S+1,{v:s.km,fmt:FMT.km});
+    setCell(rows,sr,S+2,{v:swapMounted(s).map(id=>{ const g=(v.tires||[]).find(x=>x.id===id); return g?g.name:'?'; }).join(' + '),wrap:true});
+    if (s.cost) { setCell(rows,sr,S+3,{v:s.cost,fmt:FMT.pln}); sw+=s.cost; }
+    if (s.note) setCell(rows,sr,S+4,{v:s.note,wrap:true});
     sr++;
   }
-  setCell(rows,0,20,{v:'PODSUMOWANIE KOSZTÓW',...HEAD});
-  setCell(rows,1,20,{v:'Zakup opon:'}); setCell(rows,1,21,{f:'SUM(J:J)',r:round2(buy),fmt:FMT.pln});
-  setCell(rows,2,20,{v:'Wymiany:'}); setCell(rows,2,21,{f:'SUM(R:R)',r:round2(sw),fmt:FMT.pln});
-  setCell(rows,3,20,{v:'Razem:',b:true}); setCell(rows,3,21,{f:'V2+V3',r:round2(buy+sw),fmt:FMT.pln,b:true});
-  return { rows, merges:[], widths:[12,30,12,14,10,7,9,12,12,12,13,24,28,4,12,12,30,13,26,4,22,14],
-    refs:{czesci:'V2',serwis:'V3'}, vals:{czesci:buy,serwis:sw} };
+  setCell(rows,0,23,{v:'PODSUMOWANIE KOSZTÓW',...HEAD});
+  setCell(rows,1,23,{v:'Zakup opon:'}); setCell(rows,1,24,{f:'SUM(J:J)',r:round2(buy),fmt:FMT.pln});
+  setCell(rows,2,23,{v:'Wymiany:'}); setCell(rows,2,24,{f:'SUM(U:U)',r:round2(sw),fmt:FMT.pln});
+  setCell(rows,3,23,{v:'Razem:',b:true}); setCell(rows,3,24,{f:'Y2+Y3',r:round2(buy+sw),fmt:FMT.pln,b:true});
+  return { rows, merges:[], widths:[12,30,12,14,10,7,9,12,12,12,13,24,28,20,30,13,4,12,12,30,13,26,4,22,14],
+    refs:{czesci:'Y2',serwis:'Y3'}, vals:{czesci:buy,serwis:sw} };
 }
 function plansSheet(state, todayISO){
   const rows=[]; let r=1;
@@ -617,7 +669,7 @@ function dateCell(d){ return d ? { v:d, t:'date', fmt:FMT.date } : null; }
 
 function serviceSheet(cat){
   const rows=[], merges=[];
-  ['Data','Przebieg','Co','Nazwa','Kod części OEM','Data zakupu','Ilość','Cena za szt.','Koszt','Serwis koszt','Wymiana czas (własny)','Notatki']
+  ['Data','Przebieg','Co','Nazwa','Kod części OEM','Data zakupu','Ilość','Cena za szt.','Koszt','Serwis koszt','Wymiana czas (własny)','Notatki','Gdzie kupione','Link','Gwarancja do']
     .forEach((h,i)=>setCell(rows,0,i,{v:h,...HEAD}));
   const visits = alive(cat.entries).slice().sort(byDateAsc);
   let r=1, partsSum=0, laborSum=0;
@@ -644,17 +696,20 @@ function serviceSheet(cat){
         if (un!=null) setCell(rows,r+i,7,{v:un,fmt:FMT.pln});
         setCell(rows,r+i,8,{f:`IF(OR(G${R}="",H${R}=""),"",G${R}*H${R})`,r:pc==null?'':pc,fmt:FMT.pln});
         partsSum+=pc||0;
+        if (p.shop) setCell(rows,r+i,12,{v:p.shop,wrap:true});
+        if (p.url) setCell(rows,r+i,13,{v:p.url,link:true});
+        const w=warrantyOf(p, p.bought||v.date, '2000-01-01'); if (w && w.end) setCell(rows,r+i,14,dateCell(w.end));
       }
     }
     if (n>1) for (const col of [0,1,9,10,11]) merges.push(colL(col)+(r+1)+':'+colL(col)+(r+n));
     r += n;
   }
-  setCell(rows,0,13,{v:'PODSUMOWANIE KOSZTÓW',...HEAD});
-  setCell(rows,1,13,{v:'Części:'}); setCell(rows,1,14,{f:'SUM(I:I)',r:round2(partsSum),fmt:FMT.pln});
-  setCell(rows,2,13,{v:'Serwis:'}); setCell(rows,2,14,{f:'SUM(J:J)',r:round2(laborSum),fmt:FMT.pln});
-  setCell(rows,3,13,{v:'Razem:',b:true}); setCell(rows,3,14,{f:'O2+O3',r:round2(partsSum+laborSum),fmt:FMT.pln,b:true});
-  return { rows, merges, widths:[11,12,27,46,18,12,7,12,12,13,18.5,30,4,24,14],
-    refs:{czesci:'O2',serwis:'O3'}, vals:{czesci:partsSum,serwis:laborSum} };
+  setCell(rows,0,16,{v:'PODSUMOWANIE KOSZTÓW',...HEAD});
+  setCell(rows,1,16,{v:'Części:'}); setCell(rows,1,17,{f:'SUM(I:I)',r:round2(partsSum),fmt:FMT.pln});
+  setCell(rows,2,16,{v:'Serwis:'}); setCell(rows,2,17,{f:'SUM(J:J)',r:round2(laborSum),fmt:FMT.pln});
+  setCell(rows,3,16,{v:'Razem:',b:true}); setCell(rows,3,17,{f:'R2+R3',r:round2(partsSum+laborSum),fmt:FMT.pln,b:true});
+  return { rows, merges, widths:[11,12,27,46,18,12,7,12,12,13,18.5,30,20,30,13,4,24,14],
+    refs:{czesci:'R2',serwis:'R3'}, vals:{czesci:partsSum,serwis:laborSum} };
 }
 function fuelSheet(cat){
   const rows=[];
@@ -686,7 +741,7 @@ function fuelSheet(cat){
 }
 function otherSheet(cat){
   const rows=[];
-  ['Data','Co','Nazwa','Rodzaj','Koszt','Na stanie','Notatki'].forEach((h,i)=>setCell(rows,0,i,{v:h,...HEAD}));
+  ['Data','Co','Nazwa','Rodzaj','Koszt','Na stanie','Notatki','Gdzie kupione','Link','Gwarancja do'].forEach((h,i)=>setCell(rows,0,i,{v:h,...HEAD}));
   const list = alive(cat.entries).slice().sort(byDateAsc);
   let r=1; const k=emptyK();
   for (const e of list) {
@@ -698,18 +753,21 @@ function otherSheet(cat){
     if (am!=null) { setCell(rows,r,4,{v:am,fmt:FMT.pln}); k[kd]+=am; }
     if (kd==='kosmetyki') setCell(rows,r,5,{v:e.inStock===false?'nie':'tak'});
     if (e.note) setCell(rows,r,6,{v:e.note,wrap:true});
+    if (e.shop) setCell(rows,r,7,{v:e.shop,wrap:true});
+    if (e.url) setCell(rows,r,8,{v:e.url,link:true});
+    const w=warrantyOf(e, e.date, '2000-01-01'); if (w && w.end) setCell(rows,r,9,dateCell(w.end));
     r++;
   }
-  setCell(rows,0,8,{v:'PODSUMOWANIE KOSZTÓW',...HEAD});
+  setCell(rows,0,11,{v:'PODSUMOWANIE KOSZTÓW',...HEAD});
   const refs={}, keys=Object.keys(KINDS);
   keys.forEach((kd,i)=>{
-    setCell(rows,i+1,8,{v:KINDS[kd]+':'});
-    setCell(rows,i+1,9,{f:`SUMIF(D:D,"${KINDS[kd]}",E:E)`,r:round2(k[kd]),fmt:FMT.pln});
-    refs[kd]='J'+(i+2);
+    setCell(rows,i+1,11,{v:KINDS[kd]+':'});
+    setCell(rows,i+1,12,{f:`SUMIF(D:D,"${KINDS[kd]}",E:E)`,r:round2(k[kd]),fmt:FMT.pln});
+    refs[kd]='M'+(i+2);
   });
   const tot=k.czesci+k.serwis+k.myjnia+k.kosmetyki;
-  setCell(rows,keys.length+1,8,{v:'Razem:',b:true}); setCell(rows,keys.length+1,9,{f:`SUM(J2:J${keys.length+1})`,r:round2(tot),fmt:FMT.pln,b:true});
-  return { rows, merges:[], widths:[11,24,34,20,12,10,30,4,22,14], refs, vals:k };
+  setCell(rows,keys.length+1,11,{v:'Razem:',b:true}); setCell(rows,keys.length+1,12,{f:`SUM(M2:M${keys.length+1})`,r:round2(tot),fmt:FMT.pln,b:true});
+  return { rows, merges:[], widths:[11,24,34,20,12,10,30,20,30,13,4,22,14], refs, vals:k };
 }
 function summarySheet(list){
   const rows=[];
@@ -778,7 +836,7 @@ function parseSheets(sheets){
     } else if (col.km && (has('kod') || hdr.includes('co'))) {
       type='service';
       col.co=find(h=>h==='co'); col.nm=find(h=>h==='nazwa'); col.oem=find(h=>h.includes('kod'));
-      col.qty=find(h=>h.startsWith('ilo')); col.buy=find(h=>h.includes('zakup')); col.unit=find(h=>h.includes('cena')); col.cost=find(h=>h==='koszt'); col.lab=find(h=>h.includes('koszt')&&h!=='koszt'); col.time=find(h=>h.includes('czas')); col.note=find(h=>h.startsWith('notat')||h.startsWith('uwag'));
+      col.qty=find(h=>h.startsWith('ilo')); col.buy=find(h=>h==='data zakupu'); col.shop=find(h=>h.includes('gdzie kup')); col.url=find(h=>h==='link'); col.unit=find(h=>h.includes('cena')); col.cost=find(h=>h==='koszt'); col.lab=find(h=>h.includes('koszt')&&h!=='koszt'); col.time=find(h=>h.includes('czas')); col.note=find(h=>h.startsWith('notat')||h.startsWith('uwag'));
       let cur=null;
       for (let r=2;r<=sh.rows;r++) {
         const A = col.date ? sh.cell(r,col.date) : {v:null,mv:null,slave:false,master:false};
@@ -799,6 +857,7 @@ function parseSheets(sheets){
           let unit = num(get(r,col.unit)); if (unit==null && cost!=null) unit = round2(cost/qty);
           const part = { co:str(get(r,col.co,true)), name:str(get(r,col.nm,true)), oem:str(oem), qty, unit, cost: unit!=null ? round2(qty*unit) : cost };
           const bd = toISO(get(r,col.buy)); if (bd) part.bought = bd;
+          const sh = str(get(r,col.shop)); if (sh) part.shop = sh; const ur = str(get(r,col.url)); if (ur) part.url = ur;
           cur.parts.push(part);
         }
       }
@@ -806,7 +865,7 @@ function parseSheets(sheets){
       type='other';
       col.co=find(h=>h==='co'); col.nm=find(h=>h==='nazwa');
       col.cost=find(h=>h==='koszt'); col.srv=find(h=>h.includes('koszt')&&h!=='koszt');
-      col.kind=find(h=>h==='rodzaj'); col.stock=find(h=>h.includes('stanie')); col.note=find(h=>h.startsWith('notat')||h.startsWith('uwag'));
+      col.kind=find(h=>h==='rodzaj'); col.stock=find(h=>h.includes('stanie')); col.shop=find(h=>h.includes('gdzie kup')); col.url=find(h=>h==='link'); col.note=find(h=>h.startsWith('notat')||h.startsWith('uwag'));
       for (let r=2;r<=sh.rows;r++) {
         const old={ co:str(get(r,col.co)), name:str(get(r,col.nm)), cost:num(get(r,col.cost)), service:num(get(r,col.srv)) };
         const note=str(get(r,col.note));
@@ -814,6 +873,7 @@ function parseSheets(sheets){
         const kind = kindFromLabel(get(r,col.kind)) || okind(old);
         const st = str(get(r,col.stock)).toLowerCase();
         const e={ id:uid(), u:t, date:toISO(get(r,col.date)), co:old.co, name:old.name, kind, amount:oamt(old), note };
+        const sh=str(get(r,col.shop)), ur=str(get(r,col.url)); if (sh) e.shop=sh; if (ur) e.url=ur;
         if (kind==='kosmetyki') e.inStock = !(st==='nie' || st==='0' || st.startsWith('skoń') || st.startsWith('skon'));
         entries.push(e);
       }
@@ -849,8 +909,10 @@ function saveUI(){ writeJSON(LS_UI, ui); }
 
 function liveVehicles(){ return alive(state.vehicles).filter(v=>!v.archived); }
 function curVehicle(){ const v=alive(state.vehicles).find(x=>x.id===ui.v); if (v && (!v.archived || ui.arch)) return v; return liveVehicles()[0] || null; }
-function special(){ return ui.c==='__tires' || ui.c==='__info' ? ui.c : null; }
-function curCat(v){ if (!v || special()) return null; const cs=alive(v.cats); return cs.find(c=>c.id===ui.c) || cs[0] || null; }
+const SPECIAL=['__sum','__tires','__info'];
+function curView(v){ if (!v) return '__sum'; if (SPECIAL.includes(ui.c)) return ui.c; return alive(v.cats).find(c=>c.id===ui.c) || '__sum'; }
+function special(){ const v=curVehicle(); const w=curView(v); return typeof w==='string' ? w : null; }
+function curCat(v){ const w=curView(v); return typeof w==='string' ? null : w; }
 const PERIODS = { all:'Wszystko', year:'Ten rok', '12m':'12 mies.' };
 const PERIOD_TXT = { all:'od początku', year:'w tym roku', '12m':'w ostatnich 12 miesiącach' };
 function period(){ return PERIODS[ui.p] ? ui.p : 'all'; }
@@ -878,7 +940,7 @@ function everyText(pl){
 }
 function upcomingBox(v){
   const list = activePlans(v, today());
-  if (!list.length) return '';
+  if (!list.length) return `<div class="upcoming"><h2>Do zrobienia</h2><p class="muted">Nic nie jest zaplanowane. Zadania (serwis, OC, przegląd) dodasz przyciskiem „Zaplanuj” w zakładce kategorii.</p></div>`;
   return `<div class="upcoming"><h2>Do zrobienia</h2><ul>${list.slice(0,4).map(x=>`<li><button class="uprow" data-gocat="${x.cat.id}"><span class="sdot ${x.st.level}"></span><span><b>${esc(x.pl.title)}</b> <span class="muted">${esc(x.cat.name)}</span><br><span class="muted">${dueText(x.pl,x.st)}</span></span></button></li>`).join('')}</ul>${list.length>4?`<p class="muted">i jeszcze ${list.length-4}</p>`:''}</div>`;
 }
 function renderPlans(v,c){
@@ -928,33 +990,18 @@ function render(){
     return;
   }
   const st = vehicleStats(v), cats = alive(v.cats), c = curCat(v), sp = special();
-  const pr = period(), range = curRange(), rt = rangeTotals(v, range), kmd = kmDriven(v, range);
-  const tt = rt.byCat.get('__tires'), hasTireCost = alive(v.tires).some(g=>tireCost(g)) || alive(v.tswaps).some(x=>x.cost);
-  const ledgerRows = cats.map(k=>{ const t=rt.byCat.get(k.id); return `<tr><td>${esc(k.name)}</td><td>${zl(t.total)}</td></tr>`+(k.type!=='fuel'?kindLine(t.k):''); }).join('')
-    + (hasTireCost ? `<tr><td>Opony</td><td>${zl(tt.total)}</td></tr>`+(tt.k.serwis&&tt.k.czesci?`<tr class="sub"><td colspan="2">zakup ${zl(tt.k.czesci)}, wymiany ${zl(tt.k.serwis)}</td></tr>`:'') : '');
-  const series = monthlySeries(v, pr, today());
-  let html = `<section class="vhead">
-    <div class="vtitle"><h1>${esc(v.name)}${v.archived?' <span class="badge">w archiwum</span>':''}</h1>
-      <div class="vmeta"><span>Ostatni przebieg <b>${st.maxKm!=null?kmf(st.maxKm):'brak'}</b></span>${st.avg!=null?`<span>Średnie spalanie <b>${dec(st.avg)} l/100 km</b></span>`:''}</div>
-      <div class="vactions"><button class="ghost small" data-act="odo">Stan licznika</button><button class="linkbtn" data-act="editVeh">Edytuj, archiwizuj lub usuń auto</button></div>
-      ${upcomingBox(v)}
-    </div>
-    <div class="ledger">
-      <div class="seg pseg" role="radiogroup" aria-label="Okres">${Object.entries(PERIODS).map(([k,l])=>`<button type="button" data-period="${k}" aria-pressed="${pr===k}">${l}</button>`).join('')}</div>
-      <table>${ledgerRows}<tr class="total"><td>Razem</td><td>${zl(rt.total)}</td></tr></table>
-      <div class="per">${kmd?`<div><span>Przejechane</span><b>${kmf(kmd)}</b></div>
-        <div><span>Koszt na 100 km</span><b>${zl(rt.total/kmd*100)}</b></div>
-        ${rt.fuel?`<div><span>Bez paliwa</span><b>${zl((rt.total-rt.fuel)/kmd*100)}</b></div>`:''}`
-        :`<p class="muted">Koszt na 100 km pokaże się, gdy w tym okresie będą co najmniej dwa odczyty przebiegu.</p>`}</div>
-    </div>
-  </section>
-  ${series.cats.length?`<section class="chartbox"><h2>Wydatki miesięcznie <span class="muted">${PERIOD_TXT[pr]==='od początku'?'(ostatnie miesiące)':PERIOD_TXT[pr]}</span></h2>${chartSVG(series)}</section>`:''}
-  <div class="tabs" role="tablist">${cats.map(k=>`<button class="tab" role="tab" data-cat="${k.id}" aria-selected="${!sp&&c&&k.id===c.id}">${esc(k.name)}</button>`).join('')}
+  const pr = period(), range = curRange(), rt = rangeTotals(v, range);
+  let html = `<section class="vbar">
+      <h1>${esc(v.name)}${v.archived?' <span class="badge">w archiwum</span>':''}</h1>
+      <div class="vmeta"><span>Przebieg <b>${st.maxKm!=null?kmf(st.maxKm):'brak'}</b></span>${st.avg!=null?`<span>Śr. spalanie <b>${dec(st.avg)} l/100 km</b></span>`:''}</div>
+      <div class="vactions"><button class="ghost small" data-act="odo">Stan licznika</button><button class="linkbtn" data-act="editVeh">Edytuj auto</button></div>
+    </section>
+  <div class="tabs" role="tablist"><button class="tab" role="tab" data-cat="__sum" aria-selected="${sp==='__sum'}">Podsumowanie</button>${cats.map(k=>`<button class="tab" role="tab" data-cat="${k.id}" aria-selected="${!sp&&c&&k.id===c.id}">${esc(k.name)}</button>`).join('')}
     <button class="tab addcat" data-act="addCat">+ Kategoria</button><span class="tabsep"></span>
     <button class="tab" role="tab" data-cat="__tires" aria-selected="${sp==='__tires'}">Opony</button>
     <button class="tab" role="tab" data-cat="__info" aria-selected="${sp==='__info'}">Karta auta</button></div>`;
-  if (sp==='__tires') html += renderTires(v, st.maxKm);
-  else if (sp==='__info') html += renderInfo(v);
+  if (sp==='__sum') html += renderSummary(v, rt, range, pr);
+  else if (sp==='__tires') html += renderTires(v, st.maxKm);  else if (sp==='__info') html += renderInfo(v);
   else if (c) {
     const t = rt.byCat.get(c.id), per = pr==='all' ? '' : `<span class="pl">${PERIODS[pr]}:</span>`;
     let sums;
@@ -973,6 +1020,35 @@ function render(){
   }
   main.innerHTML = html;
 }
+function renderSummary(v, rt, range, pr){
+  const cats=alive(v.cats), kmd=kmDriven(v, range);
+  const tt = rt.byCat.get('__tires'), hasTireCost = alive(v.tires).some(g=>tireCost(g)) || alive(v.tswaps).some(x=>x.cost);
+  const ledgerRows = cats.map(k=>{ const t=rt.byCat.get(k.id); return `<tr><td><button class="lk" data-cat="${k.id}">${esc(k.name)}</button></td><td>${zl(t.total)}</td></tr>`+(k.type!=='fuel'?kindLine(t.k):''); }).join('')
+    + (hasTireCost ? `<tr><td><button class="lk" data-cat="__tires">Opony</button></td><td>${zl(tt.total)}</td></tr>`+(tt.k.serwis&&tt.k.czesci?`<tr class="sub"><td colspan="2">zakup ${zl(tt.k.czesci)}, wymiany ${zl(tt.k.serwis)}</td></tr>`:'') : '');
+  const series = monthlySeries(v, pr, today());
+  return `<div class="sumgrid">
+    <div class="ledger">
+      <div class="seg pseg" role="radiogroup" aria-label="Okres">${Object.entries(PERIODS).map(([k,l])=>`<button type="button" data-period="${k}" aria-pressed="${pr===k}">${l}</button>`).join('')}</div>
+      <table>${ledgerRows}<tr class="total"><td>Razem</td><td>${zl(rt.total)}</td></tr></table>
+      <div class="per">${kmd?`<div><span>Przejechane</span><b>${kmf(kmd)}</b></div>
+        <div><span>Koszt na 100 km</span><b>${zl(rt.total/kmd*100)}</b></div>
+        ${rt.fuel?`<div><span>Bez paliwa</span><b>${zl((rt.total-rt.fuel)/kmd*100)}</b></div>`:''}`
+        :`<p class="muted">Koszt na 100 km pokaże się, gdy w tym okresie będą co najmniej dwa odczyty przebiegu.</p>`}</div>
+    </div>
+    <div class="side">${upcomingBox(v)}${warrantyBox(v)}${recentBox(v)}</div>
+  </div>
+  ${series.cats.length?`<section class="chartbox"><h2>Wydatki miesięcznie <span class="muted">${pr==='all'?'(ostatnie miesiące)':PERIOD_TXT[pr]}</span></h2>${chartSVG(series)}</section>`:''}`;
+}
+function warrantyBox(v){
+  const list=warrantyList(v, today()).filter(x=>x.w.days>=-30);
+  if (!list.length) return '';
+  return `<div class="upcoming"><h2>Gwarancje</h2><ul>${list.slice(0,5).map(x=>`<li><button class="uprow" data-gocat="${x.cat.id}"><span class="sdot ${x.w.level==='exp'?'over':x.w.level==='soon'?'soon':'good'}"></span><span><b>${esc(x.title)}</b> <span class="muted">${esc(x.cat.name)}</span><br><span class="muted">${x.w.days<0?`skończyła się ${dshow(x.w.end)}`:`do ${dshow(x.w.end)} (${x.w.days>60?`${Math.round(x.w.days/30.4)} mies.`:`${x.w.days} dni`})`}</span></span></button></li>`).join('')}</ul>${list.length>5?`<p class="muted">i jeszcze ${list.length-5}</p>`:''}</div>`;
+}
+function recentBox(v){
+  const items=costItems(v).filter(i=>i.date).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6);
+  if (!items.length) return '';
+  return `<div class="upcoming"><h2>Ostatnie wydatki</h2><ul>${items.map(i=>`<li><button class="uprow rec" data-gocat="${i.cat.id}"><span class="rd">${dshow(i.date)}</span><span class="rt">${esc(i.title)} <span class="muted">${esc(i.cat.name)}</span></span><b>${zl(i.amount)}</b></button></li>`).join('')}</ul></div>`;
+}
 function octTable(c, range){
   const fs=fuelStats(c, range);
   if (!fs.byOct.length) return '';
@@ -980,6 +1056,44 @@ function octTable(c, range){
   return `<div class="octbox"><h3>Porównanie paliw</h3><div class="tscroll"><table class="otab"><thead><tr><th>Paliwo</th><th>Śr. spalanie</th><th>Śr. cena za litr</th><th>Koszt na 100 km</th><th>Przejechane</th></tr></thead><tbody>
     ${fs.byOct.map(o=>`<tr${best&&best.oct===o.oct?' class="best"':''}><td><span class="oct">${o.oct}</span></td><td>${dec(o.cons)} l/100 km</td><td>${o.price!=null?zl(o.price):'–'}</td><td><b>${o.per100!=null?zl(o.per100):'–'}</b></td><td>${kmf(o.km)}</td></tr>`).join('')}
     </tbody></table></div><p class="hint">Kilometry między tankowaniami przypisane są do paliwa z poprzedniego tankowania, bo to ono było wtedy w baku. Wyniki są wiarygodne przy tankowaniu do pełna.${fs.byOct.some(o=>o.n<3)?' Przy mniej niż 3 tankowaniach danego paliwa traktuj wynik orientacyjnie.':''}</p></div>`;
+}
+function safeUrl(u){
+  u=String(u||'').trim(); if (!u) return '';
+  if (!/^https?:\/\//i.test(u)) { if (/^[\w-]+(\.[\w-]+)+([\/?#].*)?$/.test(u)) u='https://'+u; else return ''; }
+  try { const x=new URL(u); return (x.protocol==='http:'||x.protocol==='https:') ? x.href : ''; } catch { return ''; }
+}
+function hostOf(u){ try { return new URL(u).hostname.replace(/^www\./,''); } catch { return 'link'; } }
+function extrasHTML(o, purchase){
+  const w=warrantyOf(o, purchase, today()), url=safeUrl(o.url), bits=[];
+  if (o.shop) bits.push(`Sklep: ${esc(o.shop)}`);
+  if (url) bits.push(`<a class="olink" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(hostOf(url))} ↗</a>`);
+  if (w && w.end) bits.push(`<span class="wb ${w.level}">${w.level==='exp'?`gwarancja skończyła się ${dshow(w.end)}`:`gwarancja do ${dshow(w.end)}`}</span>`);
+  else if (w && w.noStart) bits.push(`<span class="wb">gwarancja: brak daty startu</span>`);
+  return bits.length ? `<span class="extras">${bits.join('')}</span>` : '';
+}
+function extraFields(o, purchaseHint){
+  o=o||{}; const yrs = o.wMonths && o.wMonths%12===0;
+  return `${fld('Gdzie kupione','shop',o.shop,'autocomplete="off" placeholder="np. Allegro, Inter Cars"')}
+    ${fld('Link do oferty','url',o.url,'type="url" inputmode="url" autocomplete="off" placeholder="https://…"')}
+    <label class="f"><span>Gwarancja</span><span class="wrow"><input name="wNum" inputmode="numeric" autocomplete="off" value="${o.wMonths?(yrs?o.wMonths/12:o.wMonths):''}" placeholder="np. 2"><select name="wUnit"><option value="y" ${yrs||!o.wMonths?'selected':''}>lata</option><option value="m" ${o.wMonths&&!yrs?'selected':''}>miesiące</option></select></span></label>
+    ${fld('Początek gwarancji','wStart',o.wStart,'type="date"')}
+    <p class="hint wide whint" data-ph="${esc(purchaseHint||'datę zakupu')}"></p>`;
+}
+function readExtras(scope){
+  const q=n=>scope.querySelector(`[name=${n}]`);
+  const n=num(q('wNum').value), unit=q('wUnit').value;
+  const d={ shop:q('shop').value.trim(), url:safeUrl(q('url').value), wMonths: n ? Math.round(unit==='y'?n*12:n) : undefined, wStart: q('wStart').value || undefined };
+  if (!d.shop) d.shop=undefined; if (!d.url) d.url=undefined;
+  return d;
+}
+function bindWarranty(scope, getPurchase){
+  const h=scope.querySelector('.whint'); if (!h) return;
+  const upd=()=>{
+    const d=readExtras(scope); const start=d.wStart||getPurchase();
+    if (!d.wMonths) { h.textContent=`Gwarancja liczy się domyślnie od ${h.dataset.ph}. Datę początku zmień tylko, jeśli jest inna.`; return; }
+    h.textContent = start ? `Gwarancja do ${dshow(addMonths(start,d.wMonths))}${d.wStart?' (od wpisanej daty początku)':' (od '+h.dataset.ph+')'}.` : 'Podaj datę zakupu albo początek gwarancji.';
+  };
+  scope.addEventListener('input',upd); scope.addEventListener('change',upd); upd();
 }
 function tireDesc(g){ return [SEASONS[g.season], g.size, g.dot?`DOT ${g.dot}`:''].filter(Boolean).map(esc).join(', '); }
 function renderTires(v, curKm){
@@ -996,7 +1110,7 @@ function renderTires(v, curKm){
       <div class="pmain"><b>${esc(g.name)}${g.pos?` <span class="muted">(${esc(g.pos)})</span>`:''}</b>
         <span class="muted">${a} szt.${g.retired?` – kupione ${tireQty(g)}, wycofane ${g.retired}`:''}${tireDesc(g)?', '+tireDesc(g):''}</span>
         <span class="muted">${g.bought?`Kupione ${dshow(g.bought)}`:'Data zakupu nieznana'}${tc?`, ${zl(tc)}${g.unit!=null?` (${zl(g.unit)}/szt.)`:''}`:''}</span>
-        <span class="muted">${a===0?'Wycofane':isOn?'Założone teraz':`Przechowywane: ${g.storage?esc(g.storage):'nie wpisano gdzie'}`}</span>
+        <span class="muted">${a===0?'Wycofane':isOn?'Założone teraz':`Przechowywane: ${g.storage?esc(g.storage):'nie wpisano gdzie'}`}</span>${extrasHTML(g, g.bought)}
         ${g.note?`<span class="note-in">${esc(g.note)}</span>`:''}</div>
       <div class="amt">${kmf(ts.km.get(g.id)||0)}<small>przejechane</small></div></div>`; };
   h += `<div class="list">`+act.map(card).join('');
@@ -1020,11 +1134,11 @@ function renderEntries(c){
   if (c.type==='service') {
     return es.slice().sort((a,b)=>byDateAsc(b,a)).map(v=>{
       const parts = v.parts||[]; const ps = parts.reduce((s,p)=>s+(partCost(p)||0),0);
-      return `<button class="card" data-entry="${v.id}">
+      return `<div class="card" role="button" tabindex="0" data-entry="${v.id}">
         <div class="vtop"><span class="date">${dshow(v.date)}</span>${v.km!=null?`<span class="km">${kmf(v.km)}</span>`:''}<span class="amt">${zl(ps+(v.labor||0))}</span></div>
-        ${parts.length?`<ul class="parts">${parts.map(p=>`<li><span class="co">${esc(p.co||'—')}</span><span class="nm">${esc(p.name)}</span>${p.oem?`<span class="oem">${esc(p.oem)}</span>`:''}${p.bought?`<span class="oem">kupione ${dshow(p.bought)}</span>`:''}<span class="pc">${partCost(p)!=null?zl(partCost(p)):''}${partQty(p)!==1&&partUnit(p)!=null?`<small>${dec(partQty(p),partQty(p)%1?2:0)} × ${zl(partUnit(p))}</small>`:''}</span></li>`).join('')}</ul>`:''}
+        ${parts.length?`<ul class="parts">${parts.map(p=>`<li><span class="co">${esc(p.co||'—')}</span><span class="nm">${esc(p.name)}</span>${p.oem?`<span class="oem">${esc(p.oem)}</span>`:''}${p.bought?`<span class="oem">kupione ${dshow(p.bought)}</span>`:''}${extrasHTML(p, p.bought||v.date)}<span class="pc">${partCost(p)!=null?zl(partCost(p)):''}${partQty(p)!==1&&partUnit(p)!=null?`<small>${dec(partQty(p),partQty(p)%1?2:0)} × ${zl(partUnit(p))}</small>`:''}</span></li>`).join('')}</ul>`:''}
         <div class="vfoot"><span>Części <b>${zl(ps)}</b></span><span>Serwis <b>${zl(v.labor||0)}</b></span>${v.time?`<span>Czas własny <b>${esc(v.time)}</b></span>`:''}</div>${v.note?`<div class="note">${esc(v.note)}</div>`:''}
-      </button>`; }).join('');
+      </div>`; }).join('');
   }
   if (c.type==='fuel') {
     return fuelRows(es).reverse().map(x=>{ const e=x.e;
@@ -1041,7 +1155,7 @@ function renderEntries(c){
   const rowH = e=>{ const kd=okind(e), cos=kd==='kosmetyki', out=cos && e.inStock===false;
     return `<div class="card row${out?' gone':''}" role="button" tabindex="0" data-entry="${e.id}">
       <span class="date">${dshow(e.date)}</span>
-      <span class="main">${esc(e.co||'—')}${e.name?`<span class="muted">${esc(e.name)}</span>`:''}${e.note?`<span class="note-in">${esc(e.note)}</span>`:''}
+      <span class="main">${esc(e.co||'—')}${e.name?`<span class="muted">${esc(e.name)}</span>`:''}${extrasHTML(e, e.date)}${e.note?`<span class="note-in">${esc(e.note)}</span>`:''}
         ${cos?`<button type="button" class="stock" data-stock="${e.id}" aria-pressed="${!out}" title="Kliknij, aby zmienić">${out?'Skończony':'Na stanie'}</button>`:''}</span>
       <span class="amt">${zl(oamt(e))}<small>${KINDS[kd]}</small></span>
     </div>`; };
@@ -1155,7 +1269,8 @@ function partRow(p={}){
     ${fld('Nazwa','nm',p.name,'autocomplete="off"','c-nm')}
     <label class="f c-oem"><span>Kod OEM</span><textarea name="oem" rows="1">${esc(p.oem||'')}</textarea></label>
     ${fld('Data zakupu','bought',p.bought,'type="date"','c-buy')}${nfld('Ilość','qty',p.co||p.name||p.cost!=null?partQty(p):1,'c-qty')}${nfld('Cena za szt.','unit',partUnit(p),'c-unit')}
-    <div class="ptot"></div></div>`;
+    <div class="ptot"></div>
+    <details class="pmore"${p.shop||p.url||p.wMonths?' open':''}><summary>Sklep, link, gwarancja</summary><div class="grid">${extraFields(p,'daty zakupu części lub serwisu')}</div></details></div>`;
 }
 
 function entryDlg(v,c,e,fromPlan){
@@ -1171,7 +1286,8 @@ function entryDlg(v,c,e,fromPlan){
     onSave = form=>{
       const parts=[...form.querySelectorAll('.prow')].map(r=>{ const qty=num(r.querySelector('[name=qty]').value)||1, unit=num(r.querySelector('[name=unit]').value);
           const p={ co:r.querySelector('[name=co]').value.trim(), name:r.querySelector('[name=nm]').value.trim(), oem:r.querySelector('[name=oem]').value.trim(), qty, unit, cost: unit!=null ? round2(qty*unit) : null };
-          const bd=r.querySelector('[name=bought]').value; if (bd) p.bought=bd; return p; })
+          const bd=r.querySelector('[name=bought]').value; if (bd) p.bought=bd;
+          const ex=readExtras(r); for (const k in ex) if (ex[k]!==undefined) p[k]=ex[k]; return p; })
         .filter(p=>p.co||p.name||p.oem||p.unit!=null);
       return { date:fv(form,'date'), km:num(fv(form,'km')), labor:num(fv(form,'labor')), time:fv(form,'time'), note:fv(form,'note'), parts };
     };
@@ -1186,15 +1302,17 @@ function entryDlg(v,c,e,fromPlan){
   } else {
     const k0 = e.id ? okind(e) : (KINDS[ui.k] ? ui.k : 'czesci');
     body = `<div class="f"><span>Rodzaj kosztu</span><div class="seg seg4" role="radiogroup" aria-label="Rodzaj kosztu">${Object.entries(KINDS).map(([kk,l])=>`<label><input type="radio" name="kind" value="${kk}" ${k0===kk?'checked':''}><span>${l}</span></label>`).join('')}</div></div>
-      <div class="grid" style="margin-top:12px">${fld('Data','date',e.date||today(),'type="date"')}${nfld('Koszt','amount',e.id?oamt(e):null)}${fld('Co','co',e.co,'list="dlCo" autocomplete="off" placeholder="np. Myjnia, Wosk, Przegląd"')}${fld('Nazwa / gdzie','name',e.name,'autocomplete="off"')}
+      <div class="grid" style="margin-top:12px">${fld('Data','date',e.date||today(),'type="date"')}${nfld('Koszt','amount',e.id?oamt(e):null)}${fld('Co','co',e.co,'list="dlCo" autocomplete="off" placeholder="np. Myjnia, Wosk, Przegląd"')}${fld('Nazwa','name',e.name,'autocomplete="off"')}
       <label class="f wide chk" id="stockBox"><input type="checkbox" name="inStock" ${e.inStock===false?'':'checked'}><span>Mam jeszcze ten kosmetyk (na stanie)</span></label>
       ${notef(e.note)}</div>
+      <details class="pmore"${e.shop||e.url||e.wMonths?' open':''}><summary>Sklep, link, gwarancja</summary><div class="grid">${extraFields(e,'daty wpisu')}</div></details>
       <datalist id="dlCo">${[...new Set(sugg.filter(s=>s.kind==='other').map(s=>s.co))].map(s=>`<option value="${esc(s)}">`).join('')}</datalist>
       <p class="hint">Rodzaje: części kupione samodzielnie, serwis (przegląd, usługa warsztatu), myjnia i pielęgnacja (myjnia, detailing, ceramika), kosmetyki (szampony, woski, płyny – z oznaczeniem, czy jeszcze je masz).</p>`;
     onSave = form=>{
       const kind = fv(form,'kind') || 'czesci';
       const d = { date:fv(form,'date'), co:fv(form,'co'), name:fv(form,'name'), kind, amount:num(fv(form,'amount')), note:fv(form,'note'), cost:undefined, service:undefined };
       d.inStock = kind==='kosmetyki' ? form.elements.inStock.checked : undefined;
+      Object.assign(d, readExtras(form.querySelector('.pmore')));
       return d;
     };
   }
@@ -1212,8 +1330,10 @@ function entryDlg(v,c,e,fromPlan){
 
   if (c.type==='service') {
     const box=form.querySelector('#prows');
-    form.querySelector('#addPart').onclick=()=>{ box.insertAdjacentHTML('beforeend',partRow()); box.lastElementChild.querySelector('input').focus(); };
-    box.addEventListener('click',ev=>{ const b=ev.target.closest('.rm'); if(b){ b.closest('.prow').remove(); if(!box.children.length) box.insertAdjacentHTML('beforeend',partRow()); } });
+    const bindRow=r=>bindWarranty(r, ()=>r.querySelector('[name=bought]').value || fv(form,'date'));
+    box.querySelectorAll('.prow').forEach(bindRow);
+    form.querySelector('#addPart').onclick=()=>{ box.insertAdjacentHTML('beforeend',partRow()); bindRow(box.lastElementChild); box.lastElementChild.querySelector('input').focus(); };
+    box.addEventListener('click',ev=>{ const b=ev.target.closest('.rm'); if(b){ b.closest('.prow').remove(); if(!box.children.length) { box.insertAdjacentHTML('beforeend',partRow()); bindRow(box.lastElementChild); } } });
     const scalc=form.querySelector('#scalc');
     const supd=()=>{ let sum=0;
       box.querySelectorAll('.prow').forEach(r=>{ const q=num(r.querySelector('[name=qty]').value)||1, u=num(r.querySelector('[name=unit]').value);
@@ -1230,6 +1350,7 @@ function entryDlg(v,c,e,fromPlan){
     });
   }
   if (c.type==='other') {
+    bindWarranty(form.querySelector('.pmore'), ()=>fv(form,'date'));
     const box=form.querySelector('#stockBox'); let touched=!!e.id;
     const vis=()=>{ box.hidden = fv(form,'kind')!=='kosmetyki'; };
     form.querySelectorAll('[name=kind]').forEach(r=>r.addEventListener('change',()=>{ touched=true; vis(); }));
@@ -1293,6 +1414,7 @@ function tireDlg(v,t){
       ${fld('Gdzie przechowywane, gdy zdjęte','storage',t?.storage,'autocomplete="off" placeholder="np. garaż, Vulco"','wide')}
       ${notef(t?.note)}</div>
       <div class="calc" id="tcalc"></div>
+      <p class="sectionlabel">Sklep, link, gwarancja</p><div class="grid xbox">${extraFields(t,'daty zakupu')}</div>
       ${isNew && others.length?`<p class="sectionlabel">Zastępują inne opony?</p><div class="grid">
         <label class="f"><span>Zastępują</span><select name="repl"><option value="">nie – to dodatkowe / obecne opony</option>${others.map(g=>`<option value="${g.id}">${esc(g.name)} (${tireActive(g)} szt.)</option>`).join('')}</select></label>
         ${nfld('Ile sztuk wycofać','replQty',null)}</div>`:''}
@@ -1302,9 +1424,10 @@ function tireDlg(v,t){
       const d={ name:fv(form,'name'), season:form.elements.season.value, size:fv(form,'size'), dot:fv(form,'dot'), qty:Math.max(1,Math.round(num(fv(form,'qty'))||4)),
         bought:fv(form,'bought'), unit:num(fv(form,'unit')), extra:num(fv(form,'extra')), kmBefore:num(fv(form,'kmBefore')), pos:form.elements.pos.value, storage:fv(form,'storage'), note:fv(form,'note') };
       if (!d.name) { toast('Wpisz markę i model opon.'); return false; }
-      if (t) { d.retired=Math.min(d.qty, Math.max(0, Math.round(num(fv(form,'retired'))||0))); Object.assign(t,d); touch(t); commit(); return; }
+      Object.assign(d, readExtras(form.querySelector('.xbox')));
+      if (t) { d.retired=Math.min(d.qty, Math.max(0, Math.round(num(fv(form,'retired'))||0))); Object.assign(t,d); for (const k in t) if (t[k]===undefined) delete t[k]; touch(t); commit(); return; }
       if (!v.tires) v.tires=[]; if (!v.tswaps) v.tswaps=[];
-      const g={ id:uid(), u:Date.now(), ...d }; v.tires.push(g);
+      const g={ id:uid(), u:Date.now(), ...d }; for (const k in g) if (g[k]===undefined) delete g[k]; v.tires.push(g);
       const replId=form.elements.repl ? form.elements.repl.value : '';
       let old=null;
       if (replId) { old=v.tires.find(x=>x.id===replId); const n=Math.min(tireActive(old), Math.round(num(fv(form,'replQty'))||d.qty)); old.retired=(old.retired||0)+n; touch(old); }
@@ -1314,6 +1437,7 @@ function tireDlg(v,t){
       }
       commit(); toast('Opony dodane.');
     });
+  bindWarranty(f.querySelector('.xbox'), ()=>f.elements.bought.value);
   const calc=f.querySelector('#tcalc');
   const upd=()=>{ const q=num(f.elements.qty.value)||0, u=num(f.elements.unit.value), e=num(f.elements.extra.value)||0;
     calc.innerHTML = (u!=null||e) ? `Koszt zakupu <b>${zl(round2(q*(u||0)+e))}</b> – wliczy się do wydatków auta w dacie zakupu.` : 'Bez ceny – opony nie wliczą się do wydatków.'; };
@@ -1374,15 +1498,15 @@ function searchIndex(){
     for (const c of alive(v.cats)) {
       for (const e of alive(c.entries)) {
         if (c.type==='service') {
-          for (const p of (e.parts||[])) out.push({ v, c, e, date:p.bought||e.date, km:e.km, title:p.co||'—', sub:[p.name,p.oem].filter(Boolean).join(' – '), amt:partCost(p), text:[p.co,p.name,p.oem,e.note].join(' ') });
+          for (const p of (e.parts||[])) out.push({ v, c, e, date:p.bought||e.date, km:e.km, title:p.co||'—', sub:[p.name,p.oem].filter(Boolean).join(' – '), amt:partCost(p), text:[p.co,p.name,p.oem,e.note,p.shop,p.url].join(' ') });
           if (e.note && !(e.parts||[]).length) out.push({ v, c, e, date:e.date, km:e.km, title:'Serwis', sub:e.note, amt:e.labor, text:e.note });
           else if (e.note) out.push({ v, c, e, date:e.date, km:e.km, title:'Notatka z serwisu', sub:e.note, amt:null, text:e.note });
         } else if (c.type==='fuel') { if (e.note) out.push({ v, c, e, date:e.date, km:e.km, title:'Tankowanie', sub:e.note, amt:null, text:e.note }); }
-        else out.push({ v, c, e, date:e.date, km:null, title:e.co||'—', sub:[e.name,e.note].filter(Boolean).join(' – '), amt:oamt(e), text:[e.co,e.name,e.note,KINDS[okind(e)]].join(' ') });
+        else out.push({ v, c, e, date:e.date, km:null, title:e.co||'—', sub:[e.name,e.note].filter(Boolean).join(' – '), amt:oamt(e), text:[e.co,e.name,e.note,KINDS[okind(e)],e.shop,e.url].join(' ') });
       }
       for (const pl of alive(c.plans)) out.push({ v, c, pl, date:pl.dueDate, km:pl.dueKm, title:(pl.done?'Zrobione: ':'Zaplanowane: ')+pl.title, sub:pl.note||'', amt:null, text:[pl.title,pl.note].join(' ') });
     }
-    for (const t of alive(v.tires)) out.push({ v, tire:t, date:'', km:null, title:'Opony: '+t.name, sub:[t.size,t.storage].filter(Boolean).join(' – '), amt:null, text:[t.name,t.size,t.storage,t.note,t.dot].join(' ') });
+    for (const t of alive(v.tires)) out.push({ v, tire:t, date:'', km:null, title:'Opony: '+t.name, sub:[t.size,t.storage].filter(Boolean).join(' – '), amt:null, text:[t.name,t.size,t.storage,t.note,t.dot,t.shop,t.url].join(' ') });
     for (const r of ((v.info&&v.info.rows)||[])) if (r.value) out.push({ v, info:true, date:'', km:null, title:'Karta auta: '+r.label, sub:r.value, amt:null, text:r.label+' '+r.value });
   }
   return out;
@@ -1549,9 +1673,10 @@ async function exportXlsx(){
         const c = ws.getCell(ri+1, ci+1);
         if (cell.f) c.value = { formula:cell.f, result:cell.r };
         else if (cell.t==='date') { const [y,m,d]=cell.v.split('-').map(Number); c.value = new Date(Date.UTC(y,m-1,d)); }
+        else if (cell.link) c.value = { text:cell.v, hyperlink:cell.v };
         else c.value = cell.v;
         if (cell.fmt) c.numFmt = cell.fmt;
-        c.font = { name:'Arial', size:10, bold:!!cell.b };
+        c.font = cell.link ? { name:'Arial', size:10, color:{ argb:'FF1F4EA3' }, underline:true } : { name:'Arial', size:10, bold:!!cell.b };
         c.alignment = { vertical:'middle', horizontal: cell.t==='date' ? 'left' : undefined, wrapText:!!cell.wrap };
         if (cell.fill) c.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:cell.fill } };
       }); });
@@ -1622,9 +1747,10 @@ function dataDlg(){
 
 // ---------- events ----------
 document.addEventListener('keydown', ev=>{
-  const t=ev.target; if ((ev.key==='Enter'||ev.key===' ') && t.matches && t.matches('div[data-entry],div[data-plan],div[data-tire],div[data-swap]')) { ev.preventDefault(); t.click(); }
+  const t=ev.target; if ((ev.key==='Enter'||ev.key===' ') && t.matches && t.matches('div[data-entry],div[data-plan],div[data-tire],div[data-swap]') && !ev.target.closest('a')) { ev.preventDefault(); t.click(); }
 });
 document.addEventListener('click', ev=>{
+  if (ev.target.closest('a.olink')) return;
   const sb = ev.target.closest('[data-stock]');
   if (sb && !dlg.contains(sb)) {
     const v=curVehicle(), c=v&&curCat(v), e=c&&c.entries.find(x=>x.id===sb.dataset.stock);
@@ -1637,7 +1763,7 @@ document.addEventListener('click', ev=>{
   if (!t || dlg.contains(t)) return;
   const v = curVehicle(), c = v && curCat(v);
   if (t.id==='addVeh') return vehicleDlg(null);
-  if (t.dataset.veh) { ui.v=t.dataset.veh; ui.c=null; saveUI(); return render(); }
+  if (t.dataset.veh) { ui.v=t.dataset.veh; ui.c='__sum'; saveUI(); return render(); }
   if (t.dataset.cat) { ui.c=t.dataset.cat; saveUI(); return render(); }
   if (t.dataset.kind) { ui.k=t.dataset.kind; saveUI(); return render(); }
   if (t.dataset.period) { ui.p=t.dataset.period; saveUI(); return render(); }
