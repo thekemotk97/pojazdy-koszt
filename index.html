@@ -77,7 +77,7 @@ button{cursor:pointer}
 .ledger .sub td{color:var(--muted);font-size:13px;padding-top:0;white-space:normal;text-align:left}
 
 /* tabs */
-.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs{display:flex;flex-wrap:wrap;gap:0 4px;border-bottom:1px solid var(--line)}
 .tab{background:none;border:0;border-bottom:3px solid transparent;padding:10px 14px 8px;font:600 19px/1 var(--cond);letter-spacing:.02em;color:var(--muted);white-space:nowrap}
 .tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
 .tab:hover{color:var(--ink)}
@@ -227,6 +227,7 @@ div.card{cursor:pointer}
 .legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--muted);margin-top:4px}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
 .tabsep{flex:1;min-width:12px}
+.tabgrp{display:flex;gap:4px;margin-left:auto}
 @media (max-width:560px){.tabs{flex-wrap:wrap}.tabsep{flex-basis:100%;height:0}}
 .rep{color:var(--muted);font-size:13px}
 .rep::before{content:"↻ "}
@@ -310,7 +311,7 @@ ol.steps{padding-left:20px;margin:8px 0 0;color:var(--muted);font-size:14px}
 <script>
 // ===== CORE-START (czysta logika: dane, scalanie, obliczenia, eksport, import) =====
 const FILE_NAME = 'garaz-koszty-pojazdow.json';
-const TYPES = { service:'Serwis', fuel:'Paliwo', other:'Inne' };
+const TYPES = { service:'Serwis', fuel:'Paliwo', other:'Inne (z rodzajami)', simple:'Proste wpisy' };
 
 function uid(){
   if (typeof crypto!=='undefined' && crypto.randomUUID) return crypto.randomUUID().replace(/-/g,'').slice(0,14);
@@ -391,7 +392,8 @@ function oamt(e){
   return (e.cost==null && e.service==null) ? null : (e.cost||0)+(e.service||0);
 }
 function kindFromLabel(s){ const t=str(s).toLowerCase(); if(!t) return null; for (const [k,l] of Object.entries(KINDS)) if (l.toLowerCase()===t || t.startsWith(l.toLowerCase().slice(0,5))) return k; return null; }
-function emptyK(){ return { czesci:0, serwis:0, myjnia:0, kosmetyki:0 }; }
+function emptyK(){ return { czesci:0, serwis:0, myjnia:0, kosmetyki:0, inne:0 }; }
+function ekind(c,e){ return c.type==='simple' ? 'inne' : okind(e); }
 function catTotals(cat){
   const es = alive(cat.entries), k = emptyK();
   if (cat.type==='service') {
@@ -409,8 +411,8 @@ function catTotals(cat){
     return { k, total:cost, liters, avg: ck>0 ? cl/ck*100 : null, count:rows.length };
   }
   let stock=0;
-  for (const e of es) { k[okind(e)] += oamt(e)||0; if (okind(e)==='kosmetyki' && e.inStock!==false) stock++; }
-  return { k, total:k.czesci+k.serwis+k.myjnia+k.kosmetyki, stock, count:es.length };
+  for (const e of es) { const kd=ekind(cat,e); k[kd] += oamt(e)||0; if (kd==='kosmetyki' && e.inStock!==false) stock++; }
+  return { k, total:k.czesci+k.serwis+k.myjnia+k.kosmetyki+k.inne, stock, count:es.length };
 }
 // wszystkie znane odczyty licznika: serwisy, tankowania, wpisy „stan licznika”, zmiany opon
 function kmReadings(v){
@@ -445,7 +447,7 @@ function costItems(v){
       if (e.labor) out.push({ date:e.date||'', cat:c, kind:'serwis', amount:e.labor, title:'Robocizna serwisu', e });
       for (const p of (e.parts||[])) { const pc=partCost(p); if (pc) out.push({ date:p.bought||e.date||'', cat:c, kind:'czesci', amount:pc, title:p.co||p.name||'Część', e }); }
     } else if (c.type==='fuel') { for (const r of fuelRows(es)) if (r.cost) out.push({ date:r.e.date||'', cat:c, kind:'paliwo', amount:r.cost, title:`Tankowanie ${fuelOct(r.e)}`, e:r.e }); }
-    else for (const e of es) { const a=oamt(e); if (a) out.push({ date:e.date||'', cat:c, kind:okind(e), amount:a, title:e.co||e.name||'Wpis', e }); }
+    else for (const e of es) { const a=oamt(e); if (a) out.push({ date:e.date||'', cat:c, kind:ekind(c,e), amount:a, title:e.co||e.name||'Wpis', e }); }
   }
   for (const g of alive(v.tires)) { const tc=tireCost(g); if (tc) out.push({ date:g.bought||'', cat:TIRES_CAT, kind:'czesci', amount:tc, title:'Opony: '+g.name }); }
   for (const sw of alive(v.tswaps)) if (sw.cost) out.push({ date:sw.date||'', cat:TIRES_CAT, kind:'serwis', amount:sw.cost, title:'Wymiana opon' });
@@ -463,14 +465,14 @@ function warrantyList(v, todayISO){
   const out=[];
   for (const c of alive(v.cats)) for (const e of alive(c.entries)) {
     if (c.type==='service') for (const p of (e.parts||[])) { const w=warrantyOf(p, p.bought||e.date, todayISO); if (w && w.end) out.push({ title:p.co||p.name||'Część', sub:p.name, w, cat:c, e }); }
-    else if (c.type==='other') { const w=warrantyOf(e, e.date, todayISO); if (w && w.end) out.push({ title:e.co||e.name||'Wpis', sub:e.name, w, cat:c, e }); }
+    else if (c.type==='other' || c.type==='simple') { const w=warrantyOf(e, e.date, todayISO); if (w && w.end) out.push({ title:e.co||e.name||'Wpis', sub:e.name, w, cat:c, e }); }
   }
   for (const g of alive(v.tires)) { if (!tireActive(g)) continue; const w=warrantyOf(g, g.bought, todayISO); if (w && w.end) out.push({ title:'Opony: '+g.name, w, cat:TIRES_CAT, tire:g }); }
   return out.sort((a,b)=>a.w.end.localeCompare(b.w.end));
 }
 function rangeTotals(v, range){
   const byCat=new Map(); let total=0, fuel=0;
-  for (const c of [...alive(v.cats), TIRES_CAT]) byCat.set(c.id, { k:{ czesci:0, serwis:0, myjnia:0, kosmetyki:0, paliwo:0 }, total:0 });
+  for (const c of [...alive(v.cats), TIRES_CAT]) byCat.set(c.id, { k:{ czesci:0, serwis:0, myjnia:0, kosmetyki:0, paliwo:0, inne:0 }, total:0 });
   for (const it of costItems(v)) {
     if (!inRange(it.date, range)) continue;
     const t=byCat.get(it.cat.id); t.k[it.kind]+=it.amount; t.total+=it.amount; total+=it.amount;
@@ -596,7 +598,7 @@ function buildSpec(state, todayISO){
   for (const v of alive(state.vehicles)) {
     for (const c of alive(v.cats)) {
       const name = sheetNameSafe(v.name+' - '+c.name, used);
-      const sh = c.type==='service' ? serviceSheet(c) : c.type==='fuel' ? fuelSheet(c) : otherSheet(c);
+      const sh = c.type==='service' ? serviceSheet(c) : c.type==='fuel' ? fuelSheet(c) : c.type==='simple' ? simpleSheet(c) : otherSheet(c);
       sh.name = name;
       sheets.push(sh);
       summaryRows.push({ veh:v.name, cat:c.name, sheet:name, refs:sh.refs, vals:sh.vals });
@@ -769,10 +771,29 @@ function otherSheet(cat){
   setCell(rows,keys.length+1,11,{v:'Razem:',b:true}); setCell(rows,keys.length+1,12,{f:`SUM(M2:M${keys.length+1})`,r:round2(tot),fmt:FMT.pln,b:true});
   return { rows, merges:[], widths:[11,24,34,20,12,10,30,20,30,13,4,22,14], refs, vals:k };
 }
+function simpleSheet(cat){
+  const rows=[];
+  ['Data','Co','Nazwa','Koszt','Notatki','Gdzie kupione','Link','Gwarancja do'].forEach((h,i)=>setCell(rows,0,i,{v:h,...HEAD}));
+  let r=1, sum=0;
+  for (const e of alive(cat.entries).slice().sort(byDateAsc)) {
+    const am=oamt(e);
+    setCell(rows,r,0,dateCell(e.date));
+    if (e.co) setCell(rows,r,1,{v:e.co}); if (e.name) setCell(rows,r,2,{v:e.name,wrap:true});
+    if (am!=null) { setCell(rows,r,3,{v:am,fmt:FMT.pln}); sum+=am; }
+    if (e.note) setCell(rows,r,4,{v:e.note,wrap:true});
+    if (e.shop) setCell(rows,r,5,{v:e.shop,wrap:true});
+    if (e.url) setCell(rows,r,6,{v:e.url,link:true});
+    const w=warrantyOf(e, e.date, '2000-01-01'); if (w && w.end) setCell(rows,r,7,dateCell(w.end));
+    r++;
+  }
+  setCell(rows,0,9,{v:'PODSUMOWANIE KOSZTÓW',...HEAD});
+  setCell(rows,1,9,{v:'Razem:',b:true}); setCell(rows,1,10,{f:'SUM(D:D)',r:round2(sum),fmt:FMT.pln,b:true});
+  return { rows, merges:[], widths:[11,24,34,12,30,20,30,13,4,22,14], refs:{inne:'K2'}, vals:{inne:sum} };
+}
 function summarySheet(list){
   const rows=[];
-  const keys=Object.keys(KINDS);
-  ['Pojazd','Kategoria','Części / paliwo','Serwis','Myjnia i pielęgnacja','Kosmetyki','Razem'].forEach((h,i)=>setCell(rows,0,i,{v:h,...HEAD}));
+  const keys=[...Object.keys(KINDS),'inne'];
+  ['Pojazd','Kategoria','Części / paliwo','Serwis','Myjnia i pielęgnacja','Kosmetyki','Pozostałe','Razem'].forEach((h,i)=>setCell(rows,0,i,{v:h,...HEAD}));
   let r=1;
   const vehTotals = new Map();
   for (const s of list) {
@@ -783,18 +804,18 @@ function summarySheet(list){
       if (s.refs[kd]) setCell(rows,r,2+i,{f:qsheet(s.sheet)+'!'+s.refs[kd],r:round2(val),fmt:FMT.pln});
       else setCell(rows,r,2+i,{v:0,fmt:FMT.pln});
     });
-    setCell(rows,r,6,{f:`SUM(C${R}:F${R})`,r:round2(t),fmt:FMT.pln});
+    setCell(rows,r,7,{f:`SUM(C${R}:G${R})`,r:round2(t),fmt:FMT.pln});
     vehTotals.set(s.veh,(vehTotals.get(s.veh)||0)+t);
     r++;
   }
-  setCell(rows,0,8,{v:'Pojazd',...HEAD}); setCell(rows,0,9,{v:'Razem',...HEAD});
+  setCell(rows,0,9,{v:'Pojazd',...HEAD}); setCell(rows,0,10,{v:'Razem',...HEAD});
   let i=1, all=0;
   for (const [veh,t] of vehTotals) {
-    setCell(rows,i,8,{v:veh}); setCell(rows,i,9,{f:`SUMIF(A:A,I${i+1},G:G)`,r:round2(t),fmt:FMT.pln});
+    setCell(rows,i,9,{v:veh}); setCell(rows,i,10,{f:`SUMIF(A:A,J${i+1},H:H)`,r:round2(t),fmt:FMT.pln});
     all+=t; i++;
   }
-  setCell(rows,i,8,{v:'Wszystkie pojazdy',b:true}); setCell(rows,i,9,{f:`SUM(J2:J${i})`,r:round2(all),fmt:FMT.pln,b:true});
-  return { name:'Podsumowanie', rows, merges:[], widths:[18,20,16,14,20,14,14,4,20,16] };
+  setCell(rows,i,9,{v:'Wszystkie pojazdy',b:true}); setCell(rows,i,10,{f:`SUM(K2:K${i})`,r:round2(all),fmt:FMT.pln,b:true});
+  return { name:'Podsumowanie', rows, merges:[], widths:[18,20,16,14,20,14,14,14,4,20,16] };
 }
 
 // --- import z arkusza: działa na prostej "siatce" komórek ---
@@ -860,6 +881,16 @@ function parseSheets(sheets){
           const sh = str(get(r,col.shop)); if (sh) part.shop = sh; const ur = str(get(r,col.url)); if (ur) part.url = ur;
           cur.parts.push(part);
         }
+      }
+    } else if (!has('rodzaj') && !hdr.some(h=>h && h.includes('koszt') && h!=='koszt' && !h.includes('podsumowanie'))) {
+      type='simple';
+      col.co=find(h=>h==='co'); col.nm=find(h=>h==='nazwa'); col.cost=find(h=>h==='koszt'); col.note=find(h=>h.startsWith('notat')||h.startsWith('uwag'));
+      col.shop=find(h=>h.includes('gdzie kup')); col.url=find(h=>h==='link');
+      for (let r=2;r<=sh.rows;r++) {
+        const e={ id:uid(), u:t, date:toISO(get(r,col.date)), co:str(get(r,col.co)), name:str(get(r,col.nm)), kind:'czesci', amount:num(get(r,col.cost)), note:str(get(r,col.note)) };
+        if (!e.co && !e.name && e.amount==null && !e.note) continue;
+        const sh2=str(get(r,col.shop)), ur=str(get(r,col.url)); if (sh2) e.shop=sh2; if (ur) e.url=ur;
+        entries.push(e);
       }
     } else {
       type='other';
@@ -951,7 +982,7 @@ function renderPlans(v,c){
       <div class="pmain"><b>${esc(pl.title)}</b><span class="muted">${dueText(pl,st)}</span>${everyText(pl)}${pl.note?`<span class="note-in">${esc(pl.note)}</span>`:''}</div>
       <button type="button" class="ghost" data-plandone="${pl.id}">Zrobione</button></div>`).join('') + `<h3 class="grouph">Historia</h3>`;
 }
-const KLABEL = { ...KINDS, paliwo:'Paliwo' };
+const KLABEL = { ...KINDS, paliwo:'Paliwo', inne:'Pozostałe' };
 function kindLine(k){
   const p = Object.entries(k).filter(([,val])=>val).map(([kk,val])=>`${KLABEL[kk].toLowerCase()} ${zl(val)}`);
   return p.length>1 ? `<tr class="sub"><td colspan="2">${p.join(', ')}</td></tr>` : '';
@@ -998,8 +1029,8 @@ function render(){
     </section>
   <div class="tabs" role="tablist"><button class="tab" role="tab" data-cat="__sum" aria-selected="${sp==='__sum'}">Podsumowanie</button>${cats.map(k=>`<button class="tab" role="tab" data-cat="${k.id}" aria-selected="${!sp&&c&&k.id===c.id}">${esc(k.name)}</button>`).join('')}
     <button class="tab addcat" data-act="addCat">+ Kategoria</button><span class="tabsep"></span>
-    <button class="tab" role="tab" data-cat="__tires" aria-selected="${sp==='__tires'}">Opony</button>
-    <button class="tab" role="tab" data-cat="__info" aria-selected="${sp==='__info'}">Karta auta</button></div>`;
+    <span class="tabgrp"><button class="tab" role="tab" data-cat="__tires" aria-selected="${sp==='__tires'}">Opony</button>
+    <button class="tab" role="tab" data-cat="__info" aria-selected="${sp==='__info'}">Karta auta</button></span></div>`;
   if (sp==='__sum') html += renderSummary(v, rt, range, pr);
   else if (sp==='__tires') html += renderTires(v, st.maxKm);  else if (sp==='__info') html += renderInfo(v);
   else if (c) {
@@ -1007,6 +1038,7 @@ function render(){
     let sums;
     if (c.type==='service') sums = `${per}<span>Części <b>${zl(t.k.czesci)}</b></span><span>Serwis <b>${zl(t.k.serwis)}</b></span>`;
     else if (c.type==='fuel') { const fs=fuelStats(c,range); sums = `${per}<span>Paliwo <b>${zl(fs.cost)}</b></span><span>Zatankowano <b>${dec(fs.liters,2)} l</b></span>${fs.avg!=null?`<span>Śr. spalanie <b>${dec(fs.avg)} l/100 km</b></span>`:''}`; }
+    else if (c.type==='simple') sums = `${per}<span>Razem <b>${zl(t.total)}</b></span><span>Wpisów <b>${alive(c.entries).length}</b></span>`;
     else { const stock=catTotals(c).stock; sums = per + (Object.keys(KINDS).filter(kk=>t.k[kk]).map(kk=>`<span>${KINDS[kk]} <b>${zl(t.k[kk])}</b></span>`).join('') || '<span>Brak kosztów</span>') + (stock?`<span>Kosmetyki na stanie <b>${stock}</b></span>`:''); }
     html += `<div class="catbar"><div class="sums">${sums}</div><button class="linkbtn" data-act="editCat">Edytuj kategorię</button>${c.type!=='fuel'?`<button class="ghost" data-act="addPlan">Zaplanuj</button>`:''}<button class="primary" data-act="addEntry">${c.type==='fuel'?'Dodaj tankowanie':c.type==='service'?'Dodaj serwis':'Dodaj wpis'}</button></div>`;
     if (c.type==='fuel') html += octTable(c, range);
@@ -1149,15 +1181,16 @@ function renderEntries(c){
         <span class="amt">${base?'':zl(x.cost)}<small>${x.cons!=null?`${dec(x.cons)} l/100 km`:''}${e.computer!=null?`<br>komputer ${dec(e.computer)}`:''}</small></span>
       </button>`; }).join('');
   }
-  const f = KINDS[ui.k] ? ui.k : 'all';
+  const simple = c.type==='simple';
+  const f = !simple && KINDS[ui.k] ? ui.k : 'all';
   let list = es.filter(e=>f==='all' || okind(e)===f).sort((a,b)=>byDateAsc(b,a));
   if (!list.length) return `<div class="empty"><p>Brak wpisów tego rodzaju.</p></div>`;
-  const rowH = e=>{ const kd=okind(e), cos=kd==='kosmetyki', out=cos && e.inStock===false;
+  const rowH = e=>{ const kd=okind(e), cos=!simple && kd==='kosmetyki', out=cos && e.inStock===false;
     return `<div class="card row${out?' gone':''}" role="button" tabindex="0" data-entry="${e.id}">
       <span class="date">${dshow(e.date)}</span>
       <span class="main">${esc(e.co||'—')}${e.name?`<span class="muted">${esc(e.name)}</span>`:''}${extrasHTML(e, e.date)}${e.note?`<span class="note-in">${esc(e.note)}</span>`:''}
         ${cos?`<button type="button" class="stock" data-stock="${e.id}" aria-pressed="${!out}" title="Kliknij, aby zmienić">${out?'Skończony':'Na stanie'}</button>`:''}</span>
-      <span class="amt">${zl(oamt(e))}<small>${KINDS[kd]}</small></span>
+      <span class="amt">${zl(oamt(e))}<small>${simple?'':KINDS[kd]}</small></span>
     </div>`; };
   if (f==='kosmetyki') {
     const have=list.filter(e=>e.inStock!==false), gone=list.filter(e=>e.inStock===false);
@@ -1204,9 +1237,9 @@ function vehicleDlg(v){
 function catDlg(v,c){
   const f = openDlg(c?'Edytuj kategorię':'Nowa kategoria',
     `<div class="grid">${fld('Nazwa kategorii','name',c?.name,'required autocomplete="off" placeholder="np. Ubezpieczenie"')}
-     <label class="f"><span>Rodzaj wpisów</span><select name="type" ${c&&alive(c.entries).length?'disabled':''}>
-      ${Object.entries(TYPES).map(([k,l])=>`<option value="${k}" ${(c?c.type:'other')===k?'selected':''}>${l}</option>`).join('')}</select></label></div>
-     <p class="hint">Serwis: wizyta z listą części, kosztem serwisu i czasem. Paliwo: tankowania ze spalaniem. Inne: pojedyncze wydatki z rodzajem – części, serwis, myjnia i pielęgnacja albo kosmetyki (z oznaczeniem, czy jeszcze je masz).</p>`,
+     <label class="f"><span>Rodzaj wpisów</span><select name="type" ${c&&alive(c.entries).length&&(c.type==='service'||c.type==='fuel')?'disabled':''}>
+      ${Object.entries(TYPES).filter(([k])=>!(c&&alive(c.entries).length&&(c.type==='other'||c.type==='simple')) || k==='other' || k==='simple').map(([k,l])=>`<option value="${k}" ${(c?c.type:'simple')===k?'selected':''}>${l}</option>`).join('')}</select></label></div>
+     <p class="hint">Serwis: wizyta z listą części, kosztem serwisu i czasem. Paliwo: tankowania ze spalaniem. Inne (z rodzajami): wydatki z podziałem na części, serwis, myjnię i pielęgnację oraz kosmetyki. Proste wpisy: data, co, kwota i notatka, bez rodzajów – np. ubezpieczenie, opłaty, parkingi. Między tymi dwoma możesz przełączać także, gdy są już wpisy.</p>`,
     footerStd(!!c), form=>{
       const name=fv(form,'name'); if(!name){ toast('Wpisz nazwę kategorii.'); return false; }
       if (c) { c.name=name; if(!form.elements.type.disabled) c.type=form.elements.type.value; touch(c); }
@@ -1258,7 +1291,7 @@ function suggestions(v){
   const co=new Map();
   for (const c of alive(v.cats)) for (const e of alive(c.entries)) {
     if (c.type==='service') for (const p of (e.parts||[])) { if (p.co) co.set(p.co.toLowerCase(), {co:p.co, name:p.name, oem:p.oem, unit:partUnit(p), kind:'part'}); }
-    else if (c.type==='other' && e.co) co.set(e.co.toLowerCase()+'|o', {co:e.co, name:e.name, okind:okind(e), kind:'other'});
+    else if ((c.type==='other' || c.type==='simple') && e.co) co.set(e.co.toLowerCase()+'|o', {co:e.co, name:e.name, okind:okind(e), kind:'other'});
   }
   return [...co.values()];
 }
@@ -1300,18 +1333,19 @@ function entryDlg(v,c,e,fromPlan){
       <p class="hint">Wpisz cenę za litr albo całą kwotę – drugie pole policzy się samo. Spalanie liczone jest jak w arkuszu: litry z tego tankowania na kilometry od poprzedniego. Wpis bez litrów to sam stan licznika (np. punkt startowy).</p>`;
     onSave = form=>({ date:fv(form,'date'), km:num(fv(form,'km')), liters:num(fv(form,'liters')), price:num(fv(form,'price')), computer:num(fv(form,'computer')), octane:Number(fv(form,'oct'))||95, note:fv(form,'note') });
   } else {
+    const simple = c.type==='simple';
     const k0 = e.id ? okind(e) : (KINDS[ui.k] ? ui.k : 'czesci');
-    body = `<div class="f"><span>Rodzaj kosztu</span><div class="seg seg4" role="radiogroup" aria-label="Rodzaj kosztu">${Object.entries(KINDS).map(([kk,l])=>`<label><input type="radio" name="kind" value="${kk}" ${k0===kk?'checked':''}><span>${l}</span></label>`).join('')}</div></div>
+    body = `<div class="f"${simple?' hidden':''}><span>Rodzaj kosztu</span><div class="seg seg4" role="radiogroup" aria-label="Rodzaj kosztu">${Object.entries(KINDS).map(([kk,l])=>`<label><input type="radio" name="kind" value="${kk}" ${k0===kk?'checked':''}><span>${l}</span></label>`).join('')}</div></div>
       <div class="grid" style="margin-top:12px">${fld('Data','date',e.date||today(),'type="date"')}${nfld('Koszt','amount',e.id?oamt(e):null)}${fld('Co','co',e.co,'list="dlCo" autocomplete="off" placeholder="np. Myjnia, Wosk, Przegląd"')}${fld('Nazwa','name',e.name,'autocomplete="off"')}
-      <label class="f wide chk" id="stockBox"><input type="checkbox" name="inStock" ${e.inStock===false?'':'checked'}><span>Mam jeszcze ten kosmetyk (na stanie)</span></label>
+      <label class="f wide chk" id="stockBox"${simple?' data-off="1"':''}><input type="checkbox" name="inStock" ${e.inStock===false?'':'checked'}><span>Mam jeszcze ten kosmetyk (na stanie)</span></label>
       ${notef(e.note)}</div>
       <details class="pmore"${e.shop||e.url||e.wMonths?' open':''}><summary>Sklep, link, gwarancja</summary><div class="grid">${extraFields(e,'daty wpisu')}</div></details>
       <datalist id="dlCo">${[...new Set(sugg.filter(s=>s.kind==='other').map(s=>s.co))].map(s=>`<option value="${esc(s)}">`).join('')}</datalist>
-      <p class="hint">Rodzaje: części kupione samodzielnie, serwis (przegląd, usługa warsztatu), myjnia i pielęgnacja (myjnia, detailing, ceramika), kosmetyki (szampony, woski, płyny – z oznaczeniem, czy jeszcze je masz).</p>`;
+      <p class="hint"${simple?' hidden':''}>Rodzaje: części kupione samodzielnie, serwis (przegląd, usługa warsztatu), myjnia i pielęgnacja (myjnia, detailing, ceramika), kosmetyki (szampony, woski, płyny – z oznaczeniem, czy jeszcze je masz).</p>`;
     onSave = form=>{
-      const kind = fv(form,'kind') || 'czesci';
+      const kind = simple ? (e.kind||'czesci') : (fv(form,'kind') || 'czesci');
       const d = { date:fv(form,'date'), co:fv(form,'co'), name:fv(form,'name'), kind, amount:num(fv(form,'amount')), note:fv(form,'note'), cost:undefined, service:undefined };
-      d.inStock = kind==='kosmetyki' ? form.elements.inStock.checked : undefined;
+      d.inStock = !simple && kind==='kosmetyki' ? form.elements.inStock.checked : (simple ? e.inStock : undefined);
       Object.assign(d, readExtras(form.querySelector('.pmore')));
       return d;
     };
@@ -1349,10 +1383,10 @@ function entryDlg(v,c,e,fromPlan){
       if(!nm.value && s.name) nm.value=s.name; if(!oem.value && s.oem) oem.value=s.oem; const un=row.querySelector('[name=unit]'); if(!un.value && s.unit!=null){ un.value=String(s.unit).replace('.',','); un.dispatchEvent(new Event('input',{bubbles:true})); }
     });
   }
-  if (c.type==='other') {
+  if (c.type==='other' || c.type==='simple') {
     bindWarranty(form.querySelector('.pmore'), ()=>fv(form,'date'));
-    const box=form.querySelector('#stockBox'); let touched=!!e.id;
-    const vis=()=>{ box.hidden = fv(form,'kind')!=='kosmetyki'; };
+    const box=form.querySelector('#stockBox'); let touched=!!e.id || c.type==='simple';
+    const vis=()=>{ box.hidden = c.type==='simple' || fv(form,'kind')!=='kosmetyki'; };
     form.querySelectorAll('[name=kind]').forEach(r=>r.addEventListener('change',()=>{ touched=true; vis(); }));
     form.elements.co.addEventListener('change',()=>{
       if (touched) return;
